@@ -42,7 +42,7 @@ def parse_args():
 
     #parser.add_argument('--log_steps', default=50, type=int, help='print log per n steps')
     
-    ### 중요 ###
+    ## 중요 ##
     parser.add_argument('--model', default='lstm', type=str, help='model type')
     parser.add_argument('--optimizer', default='adam', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type')

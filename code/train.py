@@ -11,7 +11,7 @@ def main(args):
     setSeeds(args.seed)
     preprocess = Preprocess(args)
 
-    if args.mode == 'train': # junho
+    if args.mode == 'train': #junho
         wandb.login()
         preprocess.load_train_data(args.file_name)
         train_data = preprocess.get_train_data()
