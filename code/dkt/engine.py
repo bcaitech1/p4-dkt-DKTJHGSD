@@ -22,9 +22,8 @@ def run(args, train_data = None, valid_data = None, test_data = None):
         scheduler = call_scheduler(optimizer, args)
 
         best_auc = -1
-        early_stopping_counter = 0
+        #early_stopping_counter = 0
         for epoch in range(args.n_epochs):
-            print(f"Start Training: Epoch {epoch + 1}")
             ### TRAIN
             trainer = Trainer(args, model, epoch+1, optimizer, scheduler, train_loader, valid_loader) # junho
             train_auc, train_acc, train_loss = trainer.train()
@@ -46,12 +45,12 @@ def run(args, train_data = None, valid_data = None, test_data = None):
                     os.makedirs(args.model_dir)    
                 torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.model}.pt'))
                 print('\tbetter model found, saving!')
-                early_stopping_counter = 0
-            else:
-                early_stopping_counter += 1
-                if early_stopping_counter >= args.patience:
-                    print(f'EarlyStopping counter: {early_stopping_counter} out of {args.patience}')
-                    break
+                #early_stopping_counter = 0
+            # else:
+            #     early_stopping_counter += 1
+            #     if early_stopping_counter >= args.patience:
+            #         print(f'EarlyStopping counter: {early_stopping_counter} out of {args.patience}')
+            #         break
 
             # scheduler
             if args.scheduler == 'plateau':

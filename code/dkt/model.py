@@ -98,6 +98,7 @@ class LSTMATTN(nn.Module):
         self.n_layers = self.args.n_layers
         self.n_heads = self.args.n_heads
         self.drop_out = self.args.drop_out
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         # Embedding
         # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
@@ -105,9 +106,10 @@ class LSTMATTN(nn.Module):
         self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim // 3)
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim // 3)
         self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim // 3)
+        self.embedding_duration = nn.Embedding(self.args.n_duration + 1, self.hidden_dim // 3)
 
         # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim // 3) * 4, self.hidden_dim)
+        self.comb_proj = nn.Linear((self.hidden_dim // 3) * 5, self.hidden_dim)
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -135,16 +137,18 @@ class LSTMATTN(nn.Module):
             self.n_layers,
             batch_size,
             self.hidden_dim)
+        h = h.to(self.device)
 
         c = torch.zeros(
             self.n_layers,
             batch_size,
             self.hidden_dim)
+        c = c.to(self.device)
 
         return (h, c)
 
     def forward(self, input):
-        test, question, tag, _, mask, interaction, _ = input
+        test, question, tag, _, mask, interaction, _, duration= input
 
         batch_size = interaction.size(0)
 
@@ -154,11 +158,13 @@ class LSTMATTN(nn.Module):
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
+        embed_duration = self.embedding_duration(duration)
 
         embed = torch.cat([embed_interaction,
                            embed_test,
                            embed_question,
-                           embed_tag, ], 2)
+                           embed_tag,
+                           embed_duration ], 2)
 
         X = self.comb_proj(embed)
 
@@ -219,7 +225,7 @@ class Bert(nn.Module):
         self.activation = nn.Sigmoid()
 
     def forward(self, input):
-        test, question, tag, _, mask, interaction, _ = input
+        test, question, tag, _, mask, interaction, _, duration = input
         batch_size = interaction.size(0)
 
         # 신나는 embedding
@@ -228,13 +234,13 @@ class Bert(nn.Module):
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
+        embed_duration = self.embedding_duration(duration)
 
         embed = torch.cat([embed_interaction,
-
                            embed_test,
                            embed_question,
-
-                           embed_tag, ], 2)
+                           embed_tag,
+                           embed_duration], 2)
 
         X = self.comb_proj(embed)
 

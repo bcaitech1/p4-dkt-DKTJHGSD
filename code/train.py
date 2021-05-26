@@ -15,7 +15,7 @@ def main(args):
         wandb.login()
         preprocess.load_train_data(args.file_name)
         train_data = preprocess.get_train_data()
-        train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)   
+        train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)  
         name = '(' + args.model + ')' + ' ' + get_timestamp()
         wandb.init(project='dkt', config=vars(args), entity='jlee621', name = name)
         run(args, train_data = train_data, valid_data = valid_data)

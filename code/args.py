@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
     
-    parser.add_argument('--max_seq_len', default=50, type=int, help='max sequence length')
+    parser.add_argument('--max_seq_len', default=20, type=int, help='max sequence length')
     parser.add_argument('--num_workers', default=1, type=int, help='number of workers')
 
     # 모델
@@ -31,12 +31,12 @@ def parse_args():
     # 훈련
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
     parser.add_argument('--n_epochs', default=20, type=int, help='number of epochs')
-    parser.add_argument('--batch_size', default=64, type=int, help='batch size')
-    parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
-    parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
-    parser.add_argument('--patience', default=5, type=int, help='for early stopping')
+    parser.add_argument('--batch_size', default=32, type=int, help='batch size')
+    parser.add_argument('--lr', default=0.005, type=float, help='learning rate')
+    parser.add_argument('--clip_grad', default=8, type=int, help='clip grad')
+    #parser.add_argument('--patience', default=5, type=int, help='for early stopping')
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
-    parser.add_argument('--warmup_epoch', default=2, type=float)
+    parser.add_argument('--warmup_epoch', default=10, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
 
 
@@ -44,8 +44,8 @@ def parse_args():
     
     ## 중요 ##
     parser.add_argument('--model', default='lstm', type=str, help='model type')
-    parser.add_argument('--optimizer', default='adam', type=str, help='optimizer type')
-    parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type')
+    parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
+    parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type') # [plateau, steplr, cosine, linear]
     parser.add_argument('--mode', default='train', type=str, help='train or inference') # junho
 
     args = parser.parse_args()

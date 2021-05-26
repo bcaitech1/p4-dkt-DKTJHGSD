@@ -18,8 +18,19 @@ def process_duration(x, grouped): # junho
     gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
     gp['duration'] = gp['Timestamp'].shift(-1, fill_value=0)
     gp['duration'] = gp['duration'] - gp['Timestamp']
-    gp['duration'] = gp['duration'].apply(lambda x: 4*60 if x.total_seconds() > 4*60 else (int(x.total_seconds()) if x.total_seconds() >= 0 else 4*60))
+    gp['duration'] = gp['duration'].apply(lambda x: int(x.total_seconds()) if x.total_seconds() > 0 else 0)
+    gp = gp.iloc[0:-1] # 마지막 행 (소요시간이 없는) 삭제
+    #gp['duration'] = gp['duration'].apply(lambda x: 4*60 if x.total_seconds() > 4*60 else (int(x.total_seconds()) if x.total_seconds() >= 0 else 4*60))
     return gp
+
+def use_all(dt, max_seq_len):
+    seq_len = len(dt[0])
+    tmp = np.array(sum([list(i) for i in dt], [])).reshape(-1, seq_len)
+    new =[]
+    for i in range(0, seq_len, max_seq_len):
+        check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
+        new.append(check)
+    return new
 
 class Preprocess:
     def __init__(self,args):
@@ -45,6 +56,10 @@ class Preprocess:
         size = int(len(data) * ratio)
         data_1 = data[:size]
         data_2 = data[size:]
+
+        # 모든 데이터 사용
+        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
         return data_1, data_2
 
@@ -117,7 +132,6 @@ class Preprocess:
                     r['duration'].values
                 )
             )
-
         return group.values
 
     def load_train_data(self, file_name):
