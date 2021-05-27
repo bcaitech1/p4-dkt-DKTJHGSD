@@ -60,7 +60,7 @@ def run(args, train_data = None, valid_data = None, test_data = None):
     elif args.mode == 'inference':
         print("Start Inference")
         _, test_loader = get_loaders(args, None, test_data)
-        model = load_model(args, f'{args.model}.pt')
+        model = load_model(args, f'{args.save_name}.pt')
         inference = Trainer(args, model, test_dataset = test_loader) # junho
         inference.inference()
         print('='*50 + ' Inference finished ' + '='*50)
