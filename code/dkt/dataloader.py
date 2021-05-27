@@ -1,12 +1,35 @@
 import os
-from datetime import datetime
+#from datetime import datetime
 import time
-import tqdm
 import pandas as pd
 import random
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 import torch
+
+import multiprocessing
+from functools import partial
+import parmap
+import datetime
+
+def process_duration(x, grouped): # junho
+    gp = grouped.get_group(int(x))
+    gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
+    gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+    gp['duration'] = gp['Timestamp'].shift(-1, fill_value=datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
+    gp['duration'] = gp['duration'] - gp['Timestamp']
+    gp['duration'] = gp['duration'].apply(lambda x: 'A' if x.total_seconds() < 0 else (int(x.total_seconds()) if x.total_seconds() < 4*60 else ('B' if x.total_seconds() <24*60*60 else 'C')))
+    #gp['duration'] = gp['duration'].apply(lambda x: 4*60 if x.total_seconds() > 4*60 else (int(x.total_seconds()) if x.total_seconds() >= 0 else 4*60))
+    return gp
+
+def use_all(dt, max_seq_len):
+    seq_len = len(dt[0])
+    tmp = np.array(sum([list(i) for i in dt], [])).reshape(-1, seq_len)
+    new =[]
+    for i in range(0, seq_len, max_seq_len):
+        check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
+        new.append(check)
+    return new
 
 class Preprocess:
     def __init__(self,args):
@@ -33,6 +56,10 @@ class Preprocess:
         data_1 = data[:size]
         data_2 = data[size:]
 
+        # 모든 데이터 사용
+        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
         return data_1, data_2
 
     def __save_labels(self, encoder, name):
@@ -40,14 +67,13 @@ class Preprocess:
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train = True):
-        cate_cols = ['assessmentItemID', 'testId', 'KnowledgeTag']
+        #cate_cols = ['assessmentItemID', 'testId', 'KnowledgeTag', 'duration']
+        cate_cols = [i for i in list(df) if i != 'userID' and i != 'answerCode' and i != 'Timestamp']
 
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
             
-        for col in cate_cols:
-            
-            
+        for col in cate_cols:   
             le = LabelEncoder()
             if is_train:
                 #For UNKNOWN class
@@ -66,44 +92,70 @@ class Preprocess:
             df[col] = test
             
 
-        def convert_time(s):
-            timestamp = time.mktime(datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple())
-            return int(timestamp)
-
-        df['Timestamp'] = df['Timestamp'].apply(convert_time)
+        # def convert_time(s):
+        #     timestamp = time.mktime(datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple())
+        #     return int(timestamp)
+        
+        #df['Timestamp'] = df['Timestamp'].apply(convert_time)
         
         return df
 
-    def __feature_engineering(self, df):
-        #TODO
+    def __feature_engineering(self, df): # junho   
+        # 문제푸는 소요시간 추가
+        grouped = df.groupby(df.userID)
+        final_df = sorted(list(df['userID'].unique()))
+        final_df = parmap.map(partial(process_duration, grouped = grouped), 
+                                      final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
+        df = pd.concat(final_df)
+
+        # 문제 난이도 추가
+        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
+        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
+        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        diff_rate = diff_rate[['difficulty','answerCode']]
+        diff_rate = {key:value for key, value in diff_rate.values}
+
+        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
+
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        csv_file_path = os.path.join(self.args.data_dir, file_name)
-        df = pd.read_csv(csv_file_path)#, nrows=100000)
+        csv_file_path = os.path.join(self.args.data_dir, file_name) #
+        df = pd.read_csv(csv_file_path) #, nrows=100000)
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
-
                 
         self.args.n_questions = len(np.load(os.path.join(self.args.asset_dir,'assessmentItemID_classes.npy')))
         self.args.n_test = len(np.load(os.path.join(self.args.asset_dir,'testId_classes.npy')))
         self.args.n_tag = len(np.load(os.path.join(self.args.asset_dir,'KnowledgeTag_classes.npy')))
-        
-
+        self.args.n_duration = len(np.load(os.path.join(self.args.asset_dir,'duration_classes.npy')))
+        self.args.n_difficulty = len(np.load(os.path.join(self.args.asset_dir,'difficulty_classes.npy')))
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
-        columns = ['userID', 'assessmentItemID', 'testId', 'answerCode', 'KnowledgeTag']
+        columns = [i for i in list(df) if i !='Timestamp']
         group = df[columns].groupby('userID').apply(
                 lambda r: (
                     r['testId'].values, 
                     r['assessmentItemID'].values,
                     r['KnowledgeTag'].values,
-                    r['answerCode'].values
+                    r['answerCode'].values,
+                    r['duration'].values,
+                    r['difficulty'].values
                 )
             )
 
+        # group = df[columns].groupby('userID').apply(
+        #         lambda r: (
+        #             r['testId'].values, 
+        #             r['assessmentItemID'].values,
+        #             r['KnowledgeTag'].values,
+        #             r['answerCode'].values,
+        #             r['duration'].values,
+        #         )
+        #     )
         return group.values
 
     def load_train_data(self, file_name):
@@ -124,10 +176,12 @@ class DKTDataset(torch.utils.data.Dataset):
         # 각 data의 sequence length
         seq_len = len(row[0])
 
-        test, question, tag, correct = row[0], row[1], row[2], row[3]
+        test, question, tag, correct, duration, difficulty= row[0], row[1], row[2], row[3], row[4], row[5]
+        #test, question, tag, correct, duration = row[0], row[1], row[2], row[3], row[4]
         
 
-        cate_cols = [test, question, tag, correct]
+        cate_cols = [test, question, tag, correct, duration, difficulty]
+        #cate_cols = [test, question, tag, correct, duration]
 
         # max seq len을 고려하여서 이보다 길면 자르고 아닐 경우 그대로 냅둔다
         if seq_len > self.args.max_seq_len:
@@ -174,7 +228,6 @@ def collate(batch):
 
 
 def get_loaders(args, train, valid):
-
     pin_memory = False
     train_loader, valid_loader = None, None
     

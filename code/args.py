@@ -2,13 +2,11 @@ import os
 import argparse
 
 
-def parse_args(mode='train'):
+def parse_args():
     parser = argparse.ArgumentParser()
 
-    
     parser.add_argument('--seed', default=42, type=int, help='seed')
-    
-    parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
+    #parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
 
     parser.add_argument('--data_dir', default='/opt/ml/input/data/train_dataset', type=str, help='data directory')
     parser.add_argument('--asset_dir', default='asset/', type=str, help='data directory')
@@ -31,21 +29,25 @@ def parse_args(mode='train'):
     parser.add_argument('--drop_out', default=0.2, type=float, help='drop out rate')
     
     # 훈련
-    parser.add_argument('--n_epochs', default=20, type=int, help='number of epochs')
-    parser.add_argument('--batch_size', default=64, type=int, help='batch size')
-    parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
+    parser.add_argument('--split_ratio', default=0.8, type=int, help='train val split ratio') # junho
+    parser.add_argument('--n_epochs', default=25, type=int, help='number of epochs')
+    parser.add_argument('--batch_size', default=32, type=int, help='batch size')
+    parser.add_argument('--lr', default=0.004, type=float, help='learning rate')
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
-    parser.add_argument('--patience', default=5, type=int, help='for early stopping')
-    
+    #parser.add_argument('--patience', default=5, type=int, help='for early stopping')
+    parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
+    parser.add_argument('--warmup_epoch', default=5, type=float)
+    parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
 
-    parser.add_argument('--log_steps', default=50, type=int, help='print log per n steps')
-    
 
-    ### 중요 ###
+    #parser.add_argument('--log_steps', default=50, type=int, help='print log per n steps')
+    
+    ## 중요 ##
     parser.add_argument('--model', default='lstm', type=str, help='model type')
-    parser.add_argument('--optimizer', default='adam', type=str, help='optimizer type')
-    parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type')
-    
+    parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
+    parser.add_argument('--scheduler', default='steplr', type=str, help='scheduler type') # [plateau, steplr, cosine, linear]
+    parser.add_argument('--mode', default='train', type=str, help='train or inference') # junho
+
     args = parser.parse_args()
 
     return args
