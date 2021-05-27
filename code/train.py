@@ -16,7 +16,7 @@ def main(args):
         preprocess.load_train_data(args.file_name)
         train_data = preprocess.get_train_data()
         train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)  
-        name = '(' + args.model + ')' + ' ' + get_timestamp()
+        name = args.model + ' ' + '(' + get_timestamp() + ')'
         wandb.init(project='dkt', config=vars(args), entity='jlee621', name = name)
         run(args, train_data = train_data, valid_data = valid_data)
         shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 

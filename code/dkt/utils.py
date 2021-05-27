@@ -14,5 +14,5 @@ def setSeeds(seed = 42):
 def get_timestamp(): 
     KST = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(tz=KST)
-    now2str = now.strftime("%Y/%m/%d %H:%M")
+    now2str = now.strftime("%H:%M")
     return now2str
