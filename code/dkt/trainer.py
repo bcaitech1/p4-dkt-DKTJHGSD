@@ -14,7 +14,7 @@ import wandb
 
 def run(args, train_data, valid_data):
     train_loader, valid_loader = get_loaders(args, train_data, valid_data)
-    
+
     # only when using warmup scheduler
     args.total_steps = int(len(train_loader.dataset) / args.batch_size) * (args.n_epochs)
     args.warmup_steps = args.total_steps // 10
@@ -71,8 +71,10 @@ def train(train_loader, model, optimizer, args):
     for step, batch in enumerate(train_loader):
         input = process_batch(batch, args)
         preds = model(input)
-        targets = input[3] # correct
-
+        # targets = input[3] # correct
+        targets = batch[3]
+        targets = targets.type(torch.FloatTensor)
+        targets = targets.to(args.device)
 
         loss = compute_loss(preds, targets)
         update_params(loss, model, optimizer, args)
@@ -115,8 +117,10 @@ def validate(valid_loader, model, args):
         input = process_batch(batch, args)
 
         preds = model(input)
-        targets = input[3] # correct
-
+        # targets = input[3] # correct
+        targets = batch[3]
+        targets = targets.type(torch.FloatTensor)
+        targets = targets.to(args.device)
 
         # predictions
         preds = preds[:,-1]
@@ -201,7 +205,6 @@ def process_batch(batch, args):
 
     test, question, tag, correct, mask = batch
     
-    
     # change to float
     mask = mask.type(torch.FloatTensor)
     correct = correct.type(torch.FloatTensor)
@@ -232,14 +235,16 @@ def process_batch(batch, args):
 
 
     tag = tag.to(args.device)
-    correct = correct.to(args.device)
+#    correct = correct.to(args.device)
+    correct_adj = correct + 1
+    correct_adj = correct_adj.to(args.device)
     mask = mask.to(args.device)
 
     interaction = interaction.to(args.device)
     gather_index = gather_index.to(args.device)
 
     return (test, question,
-            tag, correct, mask,
+            tag, correct_adj, mask,
             interaction, gather_index)
 
 
