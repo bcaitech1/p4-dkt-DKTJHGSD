@@ -16,10 +16,9 @@ def process_duration(x, grouped): # junho
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
-    gp['duration'] = gp['Timestamp'].shift(-1, fill_value=0)
+    gp['duration'] = gp['Timestamp'].shift(-1, fill_value=datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
     gp['duration'] = gp['duration'] - gp['Timestamp']
-    gp['duration'] = gp['duration'].apply(lambda x: int(x.total_seconds()) if x.total_seconds() > 0 else 0)
-    gp = gp.iloc[0:-1] # 마지막 행 (소요시간이 없는) 삭제
+    gp['duration'] = gp['duration'].apply(lambda x: 'A' if x.total_seconds() < 0 else (int(x.total_seconds()) if x.total_seconds() < 4*60 else ('B' if x.total_seconds() <24*60*60 else 'C')))
     #gp['duration'] = gp['duration'].apply(lambda x: 4*60 if x.total_seconds() > 4*60 else (int(x.total_seconds()) if x.total_seconds() >= 0 else 4*60))
     return gp
 
@@ -68,7 +67,8 @@ class Preprocess:
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train = True):
-        cate_cols = ['assessmentItemID', 'testId', 'KnowledgeTag', 'duration']
+        #cate_cols = ['assessmentItemID', 'testId', 'KnowledgeTag', 'duration']
+        cate_cols = [i for i in list(df) if i != 'userID' and i != 'answerCode' and i != 'Timestamp']
 
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
@@ -100,12 +100,24 @@ class Preprocess:
         
         return df
 
-    def __feature_engineering(self, df): # junho       
+    def __feature_engineering(self, df): # junho   
+        # 문제푸는 소요시간 추가
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
         final_df = parmap.map(partial(process_duration, grouped = grouped), 
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
+
+        # 문제 난이도 추가
+        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
+        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
+        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        diff_rate = diff_rate[['difficulty','answerCode']]
+        diff_rate = {key:value for key, value in diff_rate.values}
+
+        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
+
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
@@ -120,18 +132,30 @@ class Preprocess:
         self.args.n_test = len(np.load(os.path.join(self.args.asset_dir,'testId_classes.npy')))
         self.args.n_tag = len(np.load(os.path.join(self.args.asset_dir,'KnowledgeTag_classes.npy')))
         self.args.n_duration = len(np.load(os.path.join(self.args.asset_dir,'duration_classes.npy')))
+        self.args.n_difficulty = len(np.load(os.path.join(self.args.asset_dir,'difficulty_classes.npy')))
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
-        columns = ['userID', 'assessmentItemID', 'testId', 'answerCode', 'KnowledgeTag', 'duration']
+        columns = [i for i in list(df) if i !='Timestamp']
         group = df[columns].groupby('userID').apply(
                 lambda r: (
                     r['testId'].values, 
                     r['assessmentItemID'].values,
                     r['KnowledgeTag'].values,
                     r['answerCode'].values,
-                    r['duration'].values
+                    r['duration'].values,
+                    r['difficulty'].values
                 )
             )
+
+        # group = df[columns].groupby('userID').apply(
+        #         lambda r: (
+        #             r['testId'].values, 
+        #             r['assessmentItemID'].values,
+        #             r['KnowledgeTag'].values,
+        #             r['answerCode'].values,
+        #             r['duration'].values,
+        #         )
+        #     )
         return group.values
 
     def load_train_data(self, file_name):
@@ -152,10 +176,12 @@ class DKTDataset(torch.utils.data.Dataset):
         # 각 data의 sequence length
         seq_len = len(row[0])
 
-        test, question, tag, correct, duration = row[0], row[1], row[2], row[3], row[4]
+        test, question, tag, correct, duration, difficulty= row[0], row[1], row[2], row[3], row[4], row[5]
+        #test, question, tag, correct, duration = row[0], row[1], row[2], row[3], row[4]
         
 
-        cate_cols = [test, question, tag, correct, duration]
+        cate_cols = [test, question, tag, correct, duration, difficulty]
+        #cate_cols = [test, question, tag, correct, duration]
 
         # max seq len을 고려하여서 이보다 길면 자르고 아닐 경우 그대로 냅둔다
         if seq_len > self.args.max_seq_len:

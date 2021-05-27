@@ -4,8 +4,6 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from .dataloader import get_loaders
-from .optimizer import get_optimizer
-from .scheduler import get_scheduler
 from .criterion import get_criterion
 from .metric import get_metric
 from sklearn.metrics import accuracy_score
@@ -163,8 +161,9 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
 
-        test, question, tag, correct, duration, mask = batch
-
+        test, question, tag, correct, duration, difficulty, mask = batch
+        #test, question, tag, correct, duration, mask = batch
+        
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
@@ -177,18 +176,12 @@ class Trainer(object): # junho
         interaction = interaction.roll(shifts=1, dims=1)
         interaction[:, 0] = 0 # set padding index to the first sequence
         interaction = (interaction * mask).to(torch.int64)
-        # print(interaction)
-        # exit()
-        #  test_id, question_id, tag
+
         test = ((test + 1) * mask).to(torch.int64)
         question = ((question + 1) * mask).to(torch.int64)
         tag = ((tag + 1) * mask).to(torch.int64)
         duration = ((duration + 1) * mask).to(torch.int64)
-
-        # gather index
-        # 마지막 sequence만 사용하기 위한 index
-        gather_index = torch.tensor(np.count_nonzero(mask, axis=1))
-        gather_index = gather_index.view(-1, 1) - 1
+        difficulty = ((difficulty + 1) * mask).to(torch.int64)
 
         # device memory로 이동
         test = test.to(self.device)
@@ -201,12 +194,16 @@ class Trainer(object): # junho
         mask = mask.to(self.device)
 
         interaction = interaction.to(self.device)
-        gather_index = gather_index.to(self.device)
         duration = duration.to(self.device)
+        difficulty = difficulty.to(self.device)
 
         return (test, question,
                 tag, correct_adj, mask,
-                interaction, gather_index, duration)
+                interaction, duration, difficulty)
+
+        # return (test, question,
+        #         tag, correct, mask,
+        #         interaction, duration)
 
 
     # loss계산하고 parameter update!

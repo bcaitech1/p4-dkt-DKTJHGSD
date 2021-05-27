@@ -26,9 +26,11 @@ class LSTM(nn.Module):
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
         self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
         self.embedding_duration = nn.Embedding(self.args.n_duration + 1, self.hidden_dim//3)
+        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
 
-        # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//3)*5, self.hidden_dim)
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//3)*6, self.hidden_dim)
+        #self.comb_proj = nn.Linear((self.hidden_dim//3)*5, self.hidden_dim)
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -57,7 +59,8 @@ class LSTM(nn.Module):
 
     def forward(self, input):
 
-        test, question, tag, _, mask, interaction, _, duration = input
+        test, question, tag, _, mask, interaction, duration, difficulty = input
+        #test, question, tag, _, mask, interaction, _, duration = input
 
         batch_size = interaction.size(0)
 
@@ -68,13 +71,21 @@ class LSTM(nn.Module):
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
         embed_duration = self.embedding_duration(duration)
+        embed_difficulty = self.embedding_difficulty(difficulty)
         
 
         embed = torch.cat([embed_interaction,
                            embed_test,
                            embed_question,
                            embed_tag,
-                           embed_duration], 2)
+                           embed_duration,
+                           embed_difficulty], 2)
+
+        # embed = torch.cat([embed_interaction,
+        #                    embed_test,
+        #                    embed_question,
+        #                    embed_tag,
+        #                    embed_duration], 2)
 
         X = self.comb_proj(embed)
 
@@ -107,9 +118,10 @@ class LSTMATTN(nn.Module):
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim // 3)
         self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim // 3)
         self.embedding_duration = nn.Embedding(self.args.n_duration + 1, self.hidden_dim // 3)
+        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
 
         # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim // 3) * 5, self.hidden_dim)
+        self.comb_proj = nn.Linear((self.hidden_dim // 3) * 6, self.hidden_dim)
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -148,7 +160,7 @@ class LSTMATTN(nn.Module):
         return (h, c)
 
     def forward(self, input):
-        test, question, tag, _, mask, interaction, _, duration= input
+        test, question, tag, _, mask, interaction, duration, difficulty = input
 
         batch_size = interaction.size(0)
 
@@ -159,12 +171,14 @@ class LSTMATTN(nn.Module):
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
         embed_duration = self.embedding_duration(duration)
+        embed_difficulty = self.embedding_duration(difficulty)
 
         embed = torch.cat([embed_interaction,
                            embed_test,
                            embed_question,
                            embed_tag,
-                           embed_duration ], 2)
+                           embed_duration,
+                           embed_difficulty ], 2)
 
         X = self.comb_proj(embed)
 
@@ -225,7 +239,7 @@ class Bert(nn.Module):
         self.activation = nn.Sigmoid()
 
     def forward(self, input):
-        test, question, tag, _, mask, interaction, _, duration = input
+        test, question, tag, _, mask, interaction, duration = input
         batch_size = interaction.size(0)
 
         # 신나는 embedding
