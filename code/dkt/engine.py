@@ -43,7 +43,7 @@ def run(args, train_data = None, valid_data = None, test_data = None):
                 model_to_save = model.module if hasattr(model, 'module') else model
                 if not os.path.exists(args.model_dir):
                     os.makedirs(args.model_dir)    
-                torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.model}.pt'))
+                torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.save_name}.pt')) #chanhyeong
                 print('\tbetter model found, saving!')
                 #early_stopping_counter = 0
             # else:
