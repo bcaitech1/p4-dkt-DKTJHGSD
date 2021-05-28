@@ -6,6 +6,11 @@ from dkt.engine import run
 from dkt.utils import setSeeds, get_timestamp
 import wandb
 
+hyperparameter_defaults = dict(
+batch_size = 64,
+learning_rate = 0.001,
+weight_decay=0.01
+) #chanhyeong, sweep config 껍데기
 
 def main(args):
     setSeeds(args.seed)
@@ -17,7 +22,14 @@ def main(args):
         train_data = preprocess.get_train_data()
         train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)  
         name = '(' + args.model + ')' + ' ' + get_timestamp()
-        wandb.init(project='dkt', config=vars(args), name = name)
+        if args.sweep : #chanhyeong
+            wandb.init(project="sweep", config=hyperparameter_defaults)
+            sweep_cfg = wandb.config
+            args.batch_size=sweep_cfg.batch_size
+            args.lr=sweep_cfg.learning_rate
+            args.weight_decay=sweep_cfg.weight_decay
+        else:
+            wandb.init(project='dkt', config=vars(args), name = name)
         run(args, train_data = train_data, valid_data = valid_data)
         # shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 -> 폴더 경로가 달라서 일단 주석처리 했습니다.
 

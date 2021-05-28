@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score
 
 import wandb
 
+
 class Trainer(object): # junho
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None):
         self.args = args

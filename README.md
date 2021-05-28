@@ -52,3 +52,14 @@ git push origin taehwan
 #   2. What, Why, How 중 1개 이상 설명
 # ------------------
 ```
+
+<br/>
+
+## command with your save model file name
+```
+python train.py --save_name my_model ==> save_dir에 my_model.pt로 저장됨.
+default save name = default.pt
+
+python train.py --mode=inference --save_name my_model
+model_dir/my_model.pt로 inference 진행
+```
