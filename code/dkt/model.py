@@ -497,13 +497,14 @@ def get_model(args): # junho
 
     
 
-def load_model(args):
-    model_path = os.path.join(args.model_dir, f'{args.model}.pt')
+def load_model(args, file_name):
+    model_path = os.path.join(args.model_dir, file_name)
     print("Loading Model from:", model_path)
+    load_state = torch.load(model_path)
     model = get_model(args)
 
     # 1. load model state
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(load_state, strict=True)
    
     print("Loading Model from:", model_path, "...Finished.")
     return model
