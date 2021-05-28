@@ -37,11 +37,11 @@ def process_duration(x, grouped): # junho
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
-    gp['tmp'] = gp['Timestamp'].shift(-1, fill_value=datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
-    gp['tmp'] = gp['tmp'] - gp['Timestamp']
-    gp['tmp'] = gp['tmp'].apply(lambda x:int(x.total_seconds()))
-    gp['duration'] = gp['tmp'].apply(lambda x: x if x >= 0 else gp['tmp'][(gp['tmp'] <= 4*60) & (gp['tmp'] >= 0)].mean())
-    gp['character'] = gp['tmp'].apply(get_character)
+    gp['time'] = gp['Timestamp'].shift(-1, fill_value=datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
+    gp['time'] = gp['time'] - gp['Timestamp']
+    gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
+    gp['duration'] = gp['time'].apply(lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4*60) & (gp['time'] >= 0)].mean())
+    gp['character'] = gp['time'].apply(get_character)
     return gp
 
 def use_all(dt, max_seq_len):
@@ -89,7 +89,7 @@ class Preprocess:
 
     def __preprocessing(self, df, is_train = True):
         # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp','duration','tmp']
+        filt = ['userID','answerCode','Timestamp','duration','time']
         cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
