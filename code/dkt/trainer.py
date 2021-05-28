@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score
 
 import wandb
 
+
 class Trainer(object): # junho
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None):
         self.args = args
@@ -36,7 +37,7 @@ class Trainer(object): # junho
                 # targets = input[3] # correct
                 targets = batch[3]
                 targets = targets.type(torch.FloatTensor)
-                targets = targets.to(self.args.device)
+                targets = targets.to(self.device)
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -97,7 +98,7 @@ class Trainer(object): # junho
                     # targets = input[3] # correct
                     targets = batch[3]
                     targets = targets.type(torch.FloatTensor)
-                    targets = targets.to(self.args.device)
+                    targets = targets.to(self.device)
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -190,7 +191,7 @@ class Trainer(object): # junho
         tag = tag.to(self.device)
         #    correct = correct.to(args.device)
         correct_adj = correct + 1
-        correct_adj = correct_adj.to(self.args.device)
+        correct_adj = correct_adj.to(self.device)
         mask = mask.to(self.device)
 
         interaction = interaction.to(self.device)
