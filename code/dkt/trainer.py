@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score
 
 import wandb
 
+
 class Trainer(object): # junho
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None):
         self.args = args
@@ -33,7 +34,9 @@ class Trainer(object): # junho
             for step, batch in enumerate(train_bar):
                 input = self.__process_batch(batch)
                 preds = self.model(input)
-                targets = input[4] # correct
+                targets = batch[4]
+                targets = targets.type(torch.FloatTensor)
+                targets = targets.to(self.device)
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -47,7 +50,7 @@ class Trainer(object): # junho
 
                 # if step % args.log_steps == 0:
                 #     print(f"Training steps: {step} Loss: {str(loss.item())}")
-                
+
                 # predictions
                 preds = preds[:,-1]
                 targets = targets[:,-1]
@@ -57,14 +60,14 @@ class Trainer(object): # junho
                 else: # cpu
                     preds = preds.detach().numpy()
                     targets = targets.detach().numpy()
-                
+
                 acc = accuracy_score(targets, np.where(preds >= 0.5, 1, 0))
                 current_lr = self.__get_lr(self.optimizer)
-                
+
                 total_preds.append(preds)
                 total_targets.append(targets)
 
-                ## update progress bar 
+                ## update progress bar
                 train_bar.set_description(f'Training [{self.epoch} / {self.args.n_epochs}]')
                 train_bar.set_postfix(loss = loss.item(), acc = acc, current_lr = current_lr)
 
@@ -76,9 +79,9 @@ class Trainer(object): # junho
         # Train AUC / ACC
         auc, acc = get_metric(total_targets, total_preds)
         loss_avg = epoch_loss/global_step
-        
+
         return auc, acc, loss_avg
-        
+
 
     def validate(self):
         self.model.eval()
@@ -91,12 +94,15 @@ class Trainer(object): # junho
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
                     preds = self.model(input)
-                    targets = input[4] # correct
+                    # targets = input[3] # correct
+                    targets = batch[4]
+                    targets = targets.type(torch.FloatTensor)
+                    targets = targets.to(self.device)
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
                     targets = targets[:,-1]
-                
+
                     if str(self.device) == 'cuda:0':
                         preds = preds.to('cpu').detach().numpy()
                         targets = targets.to('cpu').detach().numpy()
@@ -110,7 +116,7 @@ class Trainer(object): # junho
 
                     # 전체 손실 값 계산
                     eval_loss += loss.item()
-                    
+
                     # update progress bar
                     eval_bar.set_description(f'Evaluating [{self.epoch} / {self.args.n_epochs}]')
                     eval_bar.set_postfix(loss = loss.item(), acc = acc)
@@ -132,10 +138,10 @@ class Trainer(object): # junho
                 for step, batch in enumerate(predict_bar):
                     input = self.__process_batch(batch)
                     preds = self.model(input)
-                    
+
                     # predictions
                     preds = preds[:,-1]
-                    
+
                     if str(self.device) == 'cuda:0':
                         preds = preds.to('cpu').detach().numpy()
                     else: # cpu
@@ -144,7 +150,7 @@ class Trainer(object): # junho
 
         write_path = os.path.join(self.args.output_dir, "output.csv")
         if not os.path.exists(self.args.output_dir):
-            os.makedirs(self.args.output_dir)    
+            os.makedirs(self.args.output_dir)
         with open(write_path, 'w', encoding='utf8') as w:
             print("writing prediction : {}".format(write_path))
             w.write("id,prediction\n")
@@ -163,9 +169,9 @@ class Trainer(object): # junho
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
-        # 패딩을 위해 correct값에 1을 더해준다. 0은 문제를 틀렸다라는 의미인데 우리는 0을 패딩으로 사용했기 때문에 
+        # 패딩을 위해 correct값에 1을 더해준다. 0은 문제를 틀렸다라는 의미인데 우리는 0을 패딩으로 사용했기 때문에
         # 1을 틀림, 2를 맞음 으로 바꿔주는 작업. 아래 test, question, tag 같은 작업을 위해 모두 1을 더한다.
-        interaction = correct + 1 
+        interaction = correct + 1
         interaction = interaction.roll(shifts=1, dims=1)
         interaction[:, 0] = 0 # set padding index to the first sequence
         interaction = (interaction * mask).to(torch.int64)
@@ -180,17 +186,19 @@ class Trainer(object): # junho
         test = test.to(self.device)
         question = question.to(self.device)
         tag = tag.to(self.device)
-        correct = correct.to(self.device)
+        #    correct = correct.to(args.device)
+        correct_adj = correct + 1
+        correct_adj = correct_adj.to(self.device)
         mask = mask.to(self.device)
         interaction = interaction.to(self.device)
         character = character.to(self.device)
         difficulty = difficulty.to(self.device)
 
         duration = duration.to(self.device)
-
         return (duration, test, question,
-                tag, correct, mask,
+                tag, correct_adj, mask,
                 interaction, character, difficulty)
+
 
 
     # loss계산하고 parameter update!
