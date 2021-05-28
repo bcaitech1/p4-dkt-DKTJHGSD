@@ -163,9 +163,9 @@ class Preprocess:
                     r['testId'].values, 
                     r['assessmentItemID'].values,
                     r['KnowledgeTag'].values,
-                    r['answerCode'].values,
                     r['character'].values,
                     r['difficulty'].values,
+                    r['answerCode'].values,
                 )
             )
 
@@ -189,8 +189,8 @@ class DKTDataset(torch.utils.data.Dataset):
 
         # 각 data의 sequence length
         seq_len = len(row[0])
-        duration, test, question, tag, correct, character, difficulty= row[0], row[1], row[2], row[3], row[4],row[5],row[6]
-        cate_cols = [duration, test, question, tag, correct, character, difficulty]
+        duration, test, question, tag, character, difficulty, correct,= row[0], row[1], row[2], row[3], row[4],row[5],row[6]
+        cate_cols = [duration, test, question, tag, character, difficulty, correct]
 
         max_seq_len = random.randint(10, self.args.max_seq_len) if self.args.to_random_seq else self.args.max_seq_len #junho
 

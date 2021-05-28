@@ -34,9 +34,7 @@ class Trainer(object): # junho
             for step, batch in enumerate(train_bar):
                 input = self.__process_batch(batch)
                 preds = self.model(input)
-                targets = batch[4]
-                targets = targets.type(torch.FloatTensor)
-                targets = targets.to(self.device)
+                targets = input[-1] # correct
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -94,10 +92,7 @@ class Trainer(object): # junho
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
                     preds = self.model(input)
-                    # targets = input[3] # correct
-                    targets = batch[4]
-                    targets = targets.type(torch.FloatTensor)
-                    targets = targets.to(self.device)
+                    targets = input[-1] # correct
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -161,7 +156,7 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
 
-        duration, test, question, tag, correct, character, difficulty, mask = batch
+        duration, test, question, tag, character, difficulty, correct, mask = batch
         
         # change to float
         mask = mask.type(torch.FloatTensor)
@@ -173,8 +168,9 @@ class Trainer(object): # junho
         # 1을 틀림, 2를 맞음 으로 바꿔주는 작업. 아래 test, question, tag 같은 작업을 위해 모두 1을 더한다.
         interaction = correct + 1
         interaction = interaction.roll(shifts=1, dims=1)
-        interaction[:, 0] = 0 # set padding index to the first sequence
-        interaction = (interaction * mask).to(torch.int64)
+        interaction_mask = mask.roll(shifts=1, dims=1)
+        interaction_mask[:, 0] = 0
+        interaction = (interaction * interaction_mask).to(torch.int64)
 
         test = ((test + 1) * mask).to(torch.int64)
         question = ((question + 1) * mask).to(torch.int64)
@@ -186,18 +182,16 @@ class Trainer(object): # junho
         test = test.to(self.device)
         question = question.to(self.device)
         tag = tag.to(self.device)
-        #    correct = correct.to(args.device)
-        correct_adj = correct + 1
-        correct_adj = correct_adj.to(self.device)
+        correct = correct.to(self.device)
         mask = mask.to(self.device)
         interaction = interaction.to(self.device)
         character = character.to(self.device)
         difficulty = difficulty.to(self.device)
 
         duration = duration.to(self.device)
-        return (duration, test, question,
-                tag, correct_adj, mask,
-                interaction, character, difficulty)
+
+        return (duration, test, question,tag, mask,
+                interaction, character, difficulty, correct)
 
 
 
