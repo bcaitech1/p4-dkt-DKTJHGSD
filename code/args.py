@@ -12,9 +12,7 @@ def parse_args():
     parser.add_argument('--asset_dir', default='asset/', type=str, help='data directory')
     
     parser.add_argument('--file_name', default='train_data.csv', type=str, help='train file name')
-    
-    parser.add_argument('--model_dir', default='models/', type=str, help='model directory')
-    parser.add_argument('--model_name', default='model.pt', type=str, help='model file name')
+    parser.add_argument('--model_dir', default='/opt/ml/p4-dkt-DKTJHGSD/code/models', type=str, help='model directory')
 
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
@@ -39,6 +37,8 @@ def parse_args():
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
+    parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
+
 
 
     #parser.add_argument('--log_steps', default=50, type=int, help='print log per n steps')
