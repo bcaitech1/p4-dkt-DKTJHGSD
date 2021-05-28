@@ -201,6 +201,7 @@ class Trainer(object): # junho
 
 
 
+
     # loss계산하고 parameter update!
     def __compute_loss(self, preds, targets):
         """

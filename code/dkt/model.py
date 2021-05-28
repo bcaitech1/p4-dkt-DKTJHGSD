@@ -24,25 +24,25 @@ class LSTM(nn.Module):
         self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim//3)
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
         self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
-<<<<<<< HEAD
+        
         self.embedding_character = nn.Embedding(self.args.n_character + 1, self.hidden_dim//3)
         self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
-=======
-        self.embedding_duration = nn.Embedding(self.args.n_duration + 1, self.hidden_dim//3)
-        #self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
->>>>>>> 7353857891ce7c1bc3c369b5f59cb92d602d3e57
+
 
         # 수치형 Embedding
         self.embedding_duration = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
                                                 nn.LayerNorm(self.hidden_dim//3))
 
         # # embedding combination projection
-<<<<<<< HEAD
+
         self.comb_proj = nn.Linear((self.hidden_dim//3)*7, self.hidden_dim)
-=======
+
+        self.embedding_duration = nn.Embedding(self.args.n_duration + 1, self.hidden_dim//3)
+        #self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
+
+        # # embedding combination projection
         #self.comb_proj = nn.Linear((self.hidden_dim//3)*6, self.hidden_dim)
         self.comb_proj = nn.Linear((self.hidden_dim//3)*5, self.hidden_dim)
->>>>>>> 7353857891ce7c1bc3c369b5f59cb92d602d3e57
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -70,14 +70,8 @@ class LSTM(nn.Module):
         return (h, c)
 
     def forward(self, input):
-<<<<<<< HEAD
         duration, test, question, tag, _, mask, interaction, character, difficulty = input
-=======
-        test, question, tag, _, mask, interaction, duration, _ = input
-        #test, question, tag, _, mask, interaction, duration, difficulty = input
-        #test, question, tag, _, mask, interaction, _, duration = input
 
->>>>>>> 7353857891ce7c1bc3c369b5f59cb92d602d3e57
         batch_size = interaction.size(0)
 
         # 범주형 Embedding
@@ -85,17 +79,20 @@ class LSTM(nn.Module):
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
-<<<<<<< HEAD
+        
         embed_character = self.embedding_character(character)
         embed_difficulty = self.embedding_difficulty(difficulty)
 
         # 수치형 embedding
         embed_duration = self.embedding_duration(duration.unsqueeze(2)) # duration to [batch, seq, # cont features]
-=======
-        embed_duration = self.embedding_duration(duration)
-        #embed_difficulty = self.embedding_difficulty(difficulty)
-        
->>>>>>> 7353857891ce7c1bc3c369b5f59cb92d602d3e57
+      
+
+#         embed = torch.cat([embed_interaction,
+#                            embed_test,
+#                            embed_question,
+#                            embed_tag,
+#                            embed_duration,
+#                            embed_difficulty], 2)
 
 #         embed = torch.cat([embed_interaction,
 #                            embed_test,
@@ -108,12 +105,9 @@ class LSTM(nn.Module):
                            embed_test,
                            embed_question,
                            embed_tag,
-<<<<<<< HEAD
                            embed_character,
                            embed_difficulty,
-=======
->>>>>>> 7353857891ce7c1bc3c369b5f59cb92d602d3e57
-                           embed_duration], 2)
+                           embed_duration],2)
 
         X = self.comb_proj(embed)
 
@@ -489,7 +483,6 @@ class ConvBert(nn.Module): # chanhyeong
         #print("activation output=model output: ",preds,preds.shape)
 
         return preds
-
 
 
 def get_model(args): # junho
