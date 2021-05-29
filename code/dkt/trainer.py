@@ -156,7 +156,8 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
 
-        duration, test, question, tag, character, difficulty, correct, mask = batch
+        duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, correct, mask = batch
+        # batch_size = duration.size()[0]
         
         # change to float
         mask = mask.type(torch.FloatTensor)
@@ -189,9 +190,24 @@ class Trainer(object): # junho
         difficulty = difficulty.to(self.device)
 
         duration = duration.to(self.device)
+        total_s = total_s.to(self.device)
+        tag_s = tag_s.to(self.device)
+        testid_s = testid_s.to(self.device)
+        total_avg = total_avg.to(self.device)
+        tag_avg = tag_avg.to(self.device)
+        testid_avg = testid_avg.to(self.device)
 
-        return (duration, test, question,tag, mask,
-                interaction, character, difficulty, correct)
+        # trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+        #     batch_size, self.args.max_seq_len, self.args.max_seq_len
+        # ).to(self.device)
+        # mask = mask.unsqueeze(1).to(self.device)
+
+        # extended_attention_mask = mask * trg_mask
+        # extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
+        # extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+
+        return (duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, 
+                test, question,tag, mask, interaction, character, difficulty, correct)
 
 
 
