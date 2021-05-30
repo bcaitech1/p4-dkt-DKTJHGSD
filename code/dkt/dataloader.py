@@ -7,6 +7,7 @@ from sklearn.preprocessing import LabelEncoder
 import numpy as np
 import torch
 import random
+from collections import defaultdict
 
 import multiprocessing
 from functools import partial
@@ -33,7 +34,7 @@ def get_character(x):
     else :
         return 'I'
 
-def process_duration(x, grouped): # junho
+def process_by_userid(x, grouped): # junho, seoyoon
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
@@ -42,6 +43,53 @@ def process_duration(x, grouped): # junho
     gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
     gp['duration'] = gp['time'].apply(lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4*60) & (gp['time'] >= 0)].mean())
     gp['character'] = gp['time'].apply(get_character)
+
+    #frequency수치형
+    frequency = gp[gp['time'] >= 60*60]['time'].count()
+    #if frequency > 40 & frequency < 170 :  
+    #    frequency= 100
+    gp['frequency'] = frequency
+
+    """#frequency범주형
+    frequencyBin = gp[gp['time'] >= 60*60]['time'].count()
+    if frequencyBin > 170:  
+        frequencyBin=2
+    else: frequencyBin=1
+    gp['frequencyBin'] = frequencyBin"""
+
+
+    # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)
+    record = defaultdict(int)
+    gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = 0, 0, 0
+    gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = 0, 0, 0
+    total_avg, tag_avg, testid_avg, total_solved, tag_solved, testid_solved, flag = [], [], [], [], [], [], 0
+    for i in range(len(gp)):
+        if gp['time'].iloc[i] > 30*24*60*60:
+            flag = 1
+        elif flag == 1:
+            record, flag = defaultdict(int), 0
+
+        total_avg.append(float(round((record['total_correct']/record['total_solved'])*100, 2)) if record['total_solved'] != 0 else 0)
+        tag_avg.append(float(round((record[str(gp['KnowledgeTag'].iloc[i])+'cor']/record[gp['KnowledgeTag'].iloc[i]])*100, 2)) if record[gp['KnowledgeTag'].iloc[i]] != 0 else 0)
+        testid_avg.append(float(round((record[str(gp['testId'].iloc[i])+'cor']/record[gp['testId'].iloc[i]])*100,2)) if record[gp['testId'].iloc[i]] != 0 else 0)
+
+        total_solved.append(record['total_solved'])
+        record['total_solved'] += 1
+
+        tag_solved.append(record[gp['KnowledgeTag'].iloc[i]])
+        record[gp['KnowledgeTag'].iloc[i]] += 1
+
+        testid_solved.append(record[gp['testId'].iloc[i]])
+        record[gp['testId'].iloc[i]] += 1
+
+        if gp['answerCode'].iloc[i] == 1:
+            record['total_correct'] += 1
+            record[str(gp['KnowledgeTag'].iloc[i])+'cor'] += 1
+            record[str(gp['testId'].iloc[i])+'cor'] += 1
+
+    gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = total_solved, tag_solved, testid_solved
+    gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = total_avg, tag_avg, testid_avg
+
     return gp
 
 def use_all(dt, max_seq_len):
@@ -52,6 +100,7 @@ def use_all(dt, max_seq_len):
         check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
         new.append(check)
     return new
+
 
 class Preprocess:
     def __init__(self,args):
@@ -89,7 +138,10 @@ class Preprocess:
 
     def __preprocessing(self, df, is_train = True):
         # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp','duration','time']
+        filt = ['userID','answerCode','Timestamp','duration','time', 'frequency', 'total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
+        
+        #filt = ['userID','answerCode','Timestamp','duration','time', 'total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
+        
         cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
@@ -122,12 +174,15 @@ class Preprocess:
         return df
 
     def __feature_engineering(self, df): # junho   
-        # 문제푸는 소요시간 추가
+
+        # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
-        final_df = parmap.map(partial(process_duration, grouped = grouped), 
+        final_df = parmap.map(partial(process_by_userid, grouped = grouped), 
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
+
+        print(df)
 
         # 문제 난이도 추가
         test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
@@ -147,29 +202,45 @@ class Preprocess:
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
 
-        # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
+        # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용 (범주형)
                 
         self.args.n_questions = len(np.load(os.path.join(self.args.asset_dir,'assessmentItemID_classes.npy')))
         self.args.n_test = len(np.load(os.path.join(self.args.asset_dir,'testId_classes.npy')))
         self.args.n_tag = len(np.load(os.path.join(self.args.asset_dir,'KnowledgeTag_classes.npy')))
         self.args.n_character = len(np.load(os.path.join(self.args.asset_dir,'character_classes.npy')))
         self.args.n_difficulty = len(np.load(os.path.join(self.args.asset_dir,'difficulty_classes.npy')))
+        #self.args.n_frequencyBin = len(np.load(os.path.join(self.args.asset_dir,'frequencyBin_classes.npy')))
+
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
         group = df[columns].groupby('userID').apply(
                 lambda r: (
                     r['duration'].values,
+                    r['frequency'].values,
+                    r['total_solved'].values,
+                    r['tag_solved'].values,
+                    r['testid_solved'].values,
+                    r['total_avg'].values,
+                    r['tag_avg'].values,
+                    r['testid_avg'].values,
+
+
                     r['testId'].values, 
                     r['assessmentItemID'].values,
                     r['KnowledgeTag'].values,
                     r['character'].values,
                     r['difficulty'].values,
+                    #r['frequencyBin'].values,
                     r['answerCode'].values,
+
                 )
             )
 
-        self.args.len_cont_cols = [i for i in range(len(['duration']))]
+        self.args.cont_cols = ['duration', 'frequency','total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
+        #self.args.cont_cols = ['duration', 'total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
+        
+        #self.args.len_cont_cols = [i for i in range(len(['duration']))]
         return group.values
 
     def load_train_data(self, file_name):
@@ -189,8 +260,14 @@ class DKTDataset(torch.utils.data.Dataset):
 
         # 각 data의 sequence length
         seq_len = len(row[0])
-        duration, test, question, tag, character, difficulty, correct,= row[0], row[1], row[2], row[3], row[4],row[5],row[6]
-        cate_cols = [duration, test, question, tag, character, difficulty, correct]
+
+        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg = row[0], row[1], row[2], row[3], row[4],row[5],row[6], row[7]
+        #duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg = row[0], row[1], row[2], row[3], row[4],row[5],row[6]
+        test, question, tag, character, difficulty, correct = row[8], row[9], row[10], row[11], row[12], row[13]
+        
+        cate_cols = [duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, correct]
+        #cate_cols = [duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, frequencyBin, correct]
+
 
         max_seq_len = random.randint(10, self.args.max_seq_len) if self.args.to_random_seq else self.args.max_seq_len #junho
 
@@ -208,7 +285,8 @@ class DKTDataset(torch.utils.data.Dataset):
 
         # np.array -> torch.tensor 형변환
         for i, col in enumerate(cate_cols):
-            cate_cols[i] = torch.FloatTensor(col) if i in self.args.len_cont_cols else torch.tensor(col)
+            #cate_cols[i] = torch.FloatTensor(col) if i in self.args.len_cont_cols else torch.tensor(col)
+            cate_cols[i] = torch.FloatTensor(col) if i in [j for j in range(len(self.args.cont_cols))] else torch.tensor(col)
         return cate_cols
 
     def __len__(self):

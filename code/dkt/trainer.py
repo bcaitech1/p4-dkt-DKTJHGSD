@@ -156,11 +156,16 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
 
-        duration, test, question, tag, character, difficulty, correct, mask = batch
+        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, correct, mask = batch
         
+        #duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, frequencyBin, correct, mask = batch
+        # batch_size = duration.size()[0]
+
+
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
@@ -177,6 +182,7 @@ class Trainer(object): # junho
         tag = ((tag + 1) * mask).to(torch.int64)
         character = ((character +1) * mask).to(torch.int64)
         difficulty = ((difficulty + 1) * mask).to(torch.int64)
+        #frequencyBin = ((frequencyBin + 1) * mask).to(torch.int64)
 
         # device memory로 이동
         test = test.to(self.device)
@@ -187,13 +193,19 @@ class Trainer(object): # junho
         interaction = interaction.to(self.device)
         character = character.to(self.device)
         difficulty = difficulty.to(self.device)
-
+        #frequencyBin = frequencyBin.to(self.device)
+        
         duration = duration.to(self.device)
+        frequency = frequency.to(self.device)
+        total_s = total_s.to(self.device)
+        tag_s = tag_s.to(self.device)
+        testid_s = testid_s.to(self.device)
+        total_avg = total_avg.to(self.device)
+        tag_avg = tag_avg.to(self.device)
+        testid_avg = testid_avg.to(self.device)
 
-        return (duration, test, question,tag, mask,
-                interaction, character, difficulty, correct)
-
-
+        return (duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, 
+               test, question, tag, mask, interaction, character, difficulty, correct)
 
 
     # loss계산하고 parameter update!
