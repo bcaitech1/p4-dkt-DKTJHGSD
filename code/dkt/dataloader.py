@@ -90,6 +90,7 @@ def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     new =[tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]]) for i in range(0, seq_len, max_seq_len//slide)]
+    # new=[]
     # for i in range(0, seq_len, max_seq_len//slide):
     #     check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
     #     new.append(check)
@@ -195,6 +196,9 @@ class Preprocess:
         df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
+        
+        #df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', mode='w') # dataframe csv파일로 저장
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv') # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)
@@ -204,7 +208,7 @@ class Preprocess:
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
         val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
-        group = df[columns].groupby('userID').apply(lambda r: ([r[i].values for i in val]))
+        group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
 
         return group.values, cate_embeddings
 
@@ -242,7 +246,7 @@ class DKTDataset(torch.utils.data.Dataset):
 
         # np.array -> torch.tensor 형변환
         for i, col in enumerate(feat_cols):
-            feat_cols[i] = torch.FloatTensor(col) if i in [j for j in range(len(sum(self.args.continuous_feats, [])))] else torch.tensor(col)
+            feat_cols[i] = torch.FloatTensor(col) if i < len(sum(self.args.continuous_feats, [])) else torch.tensor(col)
         return feat_cols
 
     def __len__(self):

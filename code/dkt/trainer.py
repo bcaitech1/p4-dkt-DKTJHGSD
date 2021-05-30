@@ -173,6 +173,14 @@ class Trainer(object): # junho
         interaction_mask[:, 0] = 0
         interaction = (interaction * interaction_mask).to(torch.int64)
         
+        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+            batch_size, self.args.max_seq_len, self.args.max_seq_len
+        )
+        extended_mask = mask.unsqueeze(1)
+        extended_mask = extended_mask# * trg_mask
+        extended_mask = extended_mask.to(dtype=torch.float32)
+        extended_mask = (1.0 - extended_mask) * -10000.0
+
         for i in range(len(feats)):
             filt = len(sum(self.args.continuous_feats,[]))
             if i >= filt:
@@ -184,17 +192,7 @@ class Trainer(object): # junho
 
         interaction = interaction.to(self.device)
         correct = correct.to(self.device)
-        
-        #mask = mask.to(self.device)
-
-        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
-            batch_size, self.args.max_seq_len, self.args.max_seq_len
-        ).to(self.device)
-        mask = mask.unsqueeze(1).to(self.device)
-
-        extended_attention_mask = mask# * trg_mask
-        extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
-        mask = (1.0 - extended_attention_mask) * -10000.0
+        mask = extended_mask.to(self.device)
 
         return feats + [mask, interaction, correct]
 

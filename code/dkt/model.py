@@ -15,22 +15,28 @@ class LSTM(nn.Module):
         super(LSTM, self).__init__()
         self.args = args
         self.hidden_dim = self.args.hidden_dim
-        self.n_layers = self.args.n_layers
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.bidirectional = args.bidirectional
+        self.hd_div = args.hd_divider
+        self.n_layers = self.args.n_layers
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
         self.each_cont_idx = [[0, self.num_each_cont[0]]]
 
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.args.hd_divider, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = [nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.args.hd_divider, padding_idx = 0).to(self.device) for i in cate_embeddings]
+        for i in range(1, len(self.num_each_cont)):
+            self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
+
+        # # 범주형 Embedding 
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = [nn.Sequential(nn.Linear(i, self.hidden_dim//self.args.hd_divider), 
-                                            nn.LayerNorm(self.hidden_dim//self.args.hd_divider)).to(self.device) for i in self.num_each_cont]
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
-        # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//self.args.hd_divider)*self.num_feats, self.hidden_dim)
+
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -66,12 +72,12 @@ class LSTM(nn.Module):
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-        embed_cate = [embed(feed) for feed, embed in zip(cate_feats, self.embedding_cate)]
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
-        embed_cont = [embed(torch.cat(cont_feats[s:e],2)) for (s,e), embed in zip(self.each_cont_idx, self.embedding_cont)]
-
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
+        
         embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
 
         X = self.comb_proj(embed)
@@ -91,10 +97,12 @@ class LSTMATTN(nn.Module):
         super(LSTMATTN, self).__init__()
         self.args = args
         self.hidden_dim = self.args.hidden_dim
+        self.n_layers = self.args.n_layers
         self.n_heads = self.args.n_heads
         self.drop_out = self.args.drop_out
-        self.n_layers = self.args.n_layers
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.bidirectional = args.bidirectional
+        self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
         self.each_cont_idx = [[0, self.num_each_cont[0]]]
@@ -102,37 +110,38 @@ class LSTMATTN(nn.Module):
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.args.hd_divider, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = [nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.args.hd_divider, padding_idx = 0).to(self.device) for i in cate_embeddings]
+        # # 범주형 Embedding 
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = [nn.Sequential(nn.Linear(i, self.hidden_dim//self.args.hd_divider), 
-                                            nn.LayerNorm(self.hidden_dim//self.args.hd_divider)).to(self.device) for i in self.num_each_cont]
-
-        # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//self.args.hd_divider)*self.num_feats, self.hidden_dim * 4)
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
-        self.lstm = nn.LSTM(self.hidden_dim* 4,
-                            self.hidden_dim* 4,
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
+
+        self.lstm = nn.LSTM(self.hidden_dim,
+                            self.hidden_dim,
                             self.n_layers,
-                            batch_first=True,
-                            bidirectional=self.args.bidirectional)
+                            batch_first=True, 
+                            bidirectional=self.bidirectional,
+                            )
 
         self.config = BertConfig(
             3,  # not used
-            hidden_size=self.hidden_dim * 4*(2 if self.args.bidirectional else 1),
+            hidden_size=self.hidden_dim  * (2 if self.bidirectional else 1),
             num_hidden_layers=1,
             num_attention_heads=self.n_heads,
-            intermediate_size=self.hidden_dim * 4*(2 if self.args.bidirectional else 1),
+            intermediate_size=self.hidden_dim * (2 if self.bidirectional else 1),
             hidden_dropout_prob=self.drop_out,
             attention_probs_dropout_prob=self.drop_out,
         )
         self.attn = BertEncoder(self.config)
 
         # Fully connected layer
-        self.fc = nn.Linear(self.hidden_dim * 4*(2 if self.args.bidirectional else 1), 1)
+        self.fc = nn.Linear(self.hidden_dim * (2 if self.bidirectional else 1), 1)
 
         self.activation = nn.Sigmoid()
 
@@ -151,7 +160,7 @@ class LSTMATTN(nn.Module):
 
         return (h, c)
 
-    def forward(self, input):
+    def forward(self, input):        
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
         cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
@@ -159,33 +168,30 @@ class LSTMATTN(nn.Module):
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-        embed_cate = [embed(feed) for feed, embed in zip(cate_feats, self.embedding_cate)]
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
-        embed_cont = [embed(torch.cat(cont_feats[s:e],2)) for (s,e), embed in zip(self.each_cont_idx, self.embedding_cont)]
-
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
+        
         embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
-
         X = self.comb_proj(embed)
 
-        hidden = self.init_hidden(batch_size)
+        # hidden = self.init_hidden(batch_size)
         out, hidden = self.lstm(X)#, hidden)
-        out = out.contiguous().view(batch_size, -1, self.hidden_dim * 4*(2 if self.args.bidirectional else 1))
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.bidirectional else 1))
 
         # extended_attention_mask = mask.unsqueeze(1).unsqueeze(2)
         # extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
         # extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         head_mask = [None] * self.n_layers
 
-        #encoded_layers = self.attn(out, extended_attention_mask, head_mask=head_mask)
+        # encoded_layers = self.attn(out, extended_attention_mask, head_mask=head_mask)
         encoded_layers = self.attn(out, mask[:, None, :, :], head_mask=head_mask)
         sequence_output = encoded_layers[-1]
 
         out = self.fc(sequence_output)
-
         preds = self.activation(out).view(batch_size, -1)
-
         return preds
 
 
@@ -196,21 +202,29 @@ class Bert(nn.Module):
         self.args = args
         self.hidden_dim = self.args.hidden_dim
         self.n_layers = self.args.n_layers
+        self.n_heads = self.args.n_heads
+        self.drop_out = self.args.drop_out
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.bidirectional = args.bidirectional
+        self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
         self.each_cont_idx = [[0, self.num_each_cont[0]]]
 
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.args.hd_divider, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = [nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.args.hd_divider, padding_idx = 0).to(self.device) for i in cate_embeddings]
+        for i in range(1, len(self.num_each_cont)):
+            self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
+
+        # # 범주형 Embedding 
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = [nn.Sequential(nn.Linear(i, self.hidden_dim//self.args.hd_divider), 
-                                            nn.LayerNorm(self.hidden_dim//self.args.hd_divider)).to(self.device) for i in self.num_each_cont]
-    
-        # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//self.args.hd_divider)*self.num_feats, self.hidden_dim)
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
+
+
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
 
         # Bert config
         self.config = BertConfig(
@@ -238,14 +252,13 @@ class Bert(nn.Module):
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-        embed_cate = [embed(feed) for feed, embed in zip(cate_feats, self.embedding_cate)]
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
-        embed_cont = [embed(torch.cat(cont_feats[s:e],2)) for (s,e), embed in zip(self.each_cont_idx, self.embedding_cont)]
-
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
+    
         embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
-
         X = self.comb_proj(embed)
 
         # Bert
@@ -263,21 +276,29 @@ class ConvBert(nn.Module): # chanhyeong
         self.args = args
         self.hidden_dim = self.args.hidden_dim
         self.n_layers = self.args.n_layers
+        self.n_heads = self.args.n_heads
+        self.drop_out = self.args.drop_out
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.bidirectional = args.bidirectional
+        self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
         self.each_cont_idx = [[0, self.num_each_cont[0]]]
 
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.args.hd_divider, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = [nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.args.hd_divider, padding_idx = 0).to(self.device) for i in cate_embeddings]
+        for i in range(1, len(self.num_each_cont)):
+            self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
+
+        # # 범주형 Embedding 
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = [nn.Sequential(nn.Linear(i, self.hidden_dim//self.args.hd_divider), 
-                                            nn.LayerNorm(self.hidden_dim//self.args.hd_divider)).to(self.device) for i in self.num_each_cont]
-    
-        # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//self.args.hd_divider)*self.num_feats, self.hidden_dim)
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
+
+
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -317,13 +338,14 @@ class ConvBert(nn.Module): # chanhyeong
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-        embed_cate = [embed(feed) for feed, embed in zip(cate_feats, self.embedding_cate)]
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
-        embed_cont = [embed(torch.cat(cont_feats[s:e],2)) for (s,e), embed in zip(self.each_cont_idx, self.embedding_cont)]
-
-        X = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
+    
+        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+        X = self.comb_proj(embed)
 
         # Bert
         
@@ -358,6 +380,7 @@ class ConvBert(nn.Module): # chanhyeong
         return preds
 
 
+
 def get_model(args, cate_embeddings): # junho
     """
     Load model and move tensors to a given devices.
@@ -380,3 +403,4 @@ def load_model(args, file_name, cate_embeddings):
    
     print("Loading Model from:", model_path, "...Finished.")
     return model
+
