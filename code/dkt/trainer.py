@@ -192,7 +192,7 @@ class Trainer(object): # junho
         ).to(self.device)
         mask = mask.unsqueeze(1).to(self.device)
 
-        extended_attention_mask = mask * trg_mask
+        extended_attention_mask = mask# * trg_mask
         extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
         mask = (1.0 - extended_attention_mask) * -10000.0
 

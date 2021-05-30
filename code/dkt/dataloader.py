@@ -171,13 +171,19 @@ class Preprocess:
         df = pd.concat(final_df)
 
         # 문제 난이도 추가
-        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        if self.args.mode =='inference':
-            diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        elif self.args.mode == 'train':
-            diff_rate = df.groupby('difficulty').mean().reset_index()
+        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
+        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
+        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
         diff_rate = diff_rate[['difficulty','answerCode']]
         diff_rate = {key:value for key, value in diff_rate.values}
+
+        # df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        # if self.args.mode =='inference':
+        #     diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        # elif self.args.mode == 'train':
+        #     diff_rate = df.groupby('difficulty').mean().reset_index()
+        # diff_rate = diff_rate[['difficulty','answerCode']]
+        # diff_rate = {key:value for key, value in diff_rate.values}
 
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
         df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
