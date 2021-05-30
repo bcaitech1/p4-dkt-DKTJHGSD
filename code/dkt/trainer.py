@@ -155,10 +155,10 @@ class Trainer(object): # junho
 
     # 배치 전처리
     def __process_batch(self, batch):
-
-        duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, correct, mask = batch
-        # batch_size = duration.size()[0]
-        
+        feats = batch[:-2]
+        mask = batch[-1]
+        correct = batch[-2]
+        batch_size = mask.size()[0]
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
@@ -172,44 +172,31 @@ class Trainer(object): # junho
         interaction_mask = mask.roll(shifts=1, dims=1)
         interaction_mask[:, 0] = 0
         interaction = (interaction * interaction_mask).to(torch.int64)
-
-        test = ((test + 1) * mask).to(torch.int64)
-        question = ((question + 1) * mask).to(torch.int64)
-        tag = ((tag + 1) * mask).to(torch.int64)
-        character = ((character +1) * mask).to(torch.int64)
-        difficulty = ((difficulty + 1) * mask).to(torch.int64)
+        
+        for i in range(len(feats)):
+            filt = len(sum(self.args.continuous_feats,[]))
+            if i >= filt:
+                feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
 
         # device memory로 이동
-        test = test.to(self.device)
-        question = question.to(self.device)
-        tag = tag.to(self.device)
-        correct = correct.to(self.device)
-        mask = mask.to(self.device)
+        for i in range(len(feats)):
+            feats[i] = feats[i].to(self.device)
+
         interaction = interaction.to(self.device)
-        character = character.to(self.device)
-        difficulty = difficulty.to(self.device)
+        correct = correct.to(self.device)
+        
+        #mask = mask.to(self.device)
 
-        duration = duration.to(self.device)
-        total_s = total_s.to(self.device)
-        tag_s = tag_s.to(self.device)
-        testid_s = testid_s.to(self.device)
-        total_avg = total_avg.to(self.device)
-        tag_avg = tag_avg.to(self.device)
-        testid_avg = testid_avg.to(self.device)
+        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+            batch_size, self.args.max_seq_len, self.args.max_seq_len
+        ).to(self.device)
+        mask = mask.unsqueeze(1).to(self.device)
 
-        # trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
-        #     batch_size, self.args.max_seq_len, self.args.max_seq_len
-        # ).to(self.device)
-        # mask = mask.unsqueeze(1).to(self.device)
+        extended_attention_mask = mask * trg_mask
+        extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
+        mask = (1.0 - extended_attention_mask) * -10000.0
 
-        # extended_attention_mask = mask * trg_mask
-        # extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
-        # extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
-
-        return (duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, 
-                test, question,tag, mask, interaction, character, difficulty, correct)
-
-
+        return feats + [mask, interaction, correct]
 
 
     # loss계산하고 parameter update!

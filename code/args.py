@@ -22,9 +22,11 @@ def parse_args():
 
     # 모델
     parser.add_argument('--hidden_dim', default=64, type=int, help='hidden dimension size')
-    parser.add_argument('--n_layers', default=2, type=int, help='number of layers')
-    parser.add_argument('--n_heads', default=4, type=int, help='number of heads')
+    parser.add_argument('--hd_divider', default=3, type=int, help='hidden dimension divider')
+    parser.add_argument('--n_layers', default=3, type=int, help='number of layers')
+    parser.add_argument('--n_heads', default=2, type=int, help='number of heads')
     parser.add_argument('--drop_out', default=0.2, type=float, help='drop out rate')
+    parser.add_argument('--bidirectional', default=True, type=bool, help='bi or uni directional')
     
     # 훈련
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
@@ -38,9 +40,18 @@ def parse_args():
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
+    parser.add_argument('--slide_window', default=2, type=int) # junho
 
-    #parser.add_argument('--log_steps', default=50, type=int, help='print log per n steps')
-    
+
+    # feature
+    parser.add_argument('--continuous_feats', type=list, nargs='+', 
+            default=[['duration']], # ['tag_solved', 'tag_avg'], ['testid_solved', 'testid_avg']
+            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg')
+
+    parser.add_argument('--categorical_feats', type=list, nargs='+', 
+            default=['testId', 'assessmentItemID', 'KnowledgeTag', 'character', 'difficulty', 'week_number', 'mday', 'hour'],
+            help = 'testId, assessmentItemID, KnowledgeTag, character, difficulty, week_number, mday, hour')
+
     ## 중요 ##
     parser.add_argument('--model', default='lstmattn', type=str, help='model type')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')

@@ -1,5 +1,4 @@
 import os
-#from datetime import datetime
 import time
 import pandas as pd
 import random
@@ -12,7 +11,7 @@ from collections import defaultdict
 import multiprocessing
 from functools import partial
 import parmap
-import datetime
+from datetime import datetime
 
 def get_character(x):
     if x < 0:
@@ -34,15 +33,25 @@ def get_character(x):
     else :
         return 'I'
 
+def convert_time(s):
+    timestamp = datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple()
+    return timestamp
+
 def process_by_userid(x, grouped): # junho
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
-    gp['Timestamp'] = gp['Timestamp'].apply(lambda x: datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
-    gp['time'] = gp['Timestamp'].shift(-1, fill_value=datetime.datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
+    tmp = gp['Timestamp'].astype(str)
+    gp['Timestamp'] = tmp.apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+    gp['time'] = gp['Timestamp'].shift(-1, fill_value=datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
     gp['time'] = gp['time'] - gp['Timestamp']
     gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
     gp['duration'] = gp['time'].apply(lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4*60) & (gp['time'] >= 0)].mean())
     gp['character'] = gp['time'].apply(get_character)
+
+    timetuple = tmp.apply(convert_time)
+    gp['week_number'] = gp['Timestamp'].apply(lambda x:x.isocalendar()[1]) # 해당 년도의 몇번째 주인지
+    gp['mday'] = timetuple.apply(lambda x:x.tm_wday) # 요일
+    gp['hour'] = timetuple.apply(lambda x:x.tm_hour) # 시간
     
     # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)
     record = defaultdict(int)
@@ -77,13 +86,13 @@ def process_by_userid(x, grouped): # junho
     gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = total_avg, tag_avg, testid_avg
     return gp
 
-def use_all(dt, max_seq_len):
+def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
-    new =[]
-    for i in range(0, seq_len, max_seq_len):
-        check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
-        new.append(check)
+    new =[tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]]) for i in range(0, seq_len, max_seq_len//slide)]
+    # for i in range(0, seq_len, max_seq_len//slide):
+    #     check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
+    #     new.append(check)
     return new
 
 class Preprocess:
@@ -91,12 +100,13 @@ class Preprocess:
         self.args = args
         self.train_data = None
         self.test_data = None
+        self.cate_embeddings = None
         
     def get_train_data(self):
-        return self.train_data
+        return self.train_data, self.cate_embeddings
 
     def get_test_data(self):
-        return self.test_data
+        return self.test_data, self.cate_embeddings
 
     def split_data(self, data, ratio=0.7, shuffle=True, seed=0):
         """
@@ -111,8 +121,11 @@ class Preprocess:
         data_2 = data[size:]
 
         # 모든 데이터 사용
-        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
-        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len), data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                    data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                    data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
         return data_1, data_2
 
@@ -122,7 +135,7 @@ class Preprocess:
 
     def __preprocessing(self, df, is_train = True):
         # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp','duration','time', 'total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
+        filt = ['userID','answerCode','Timestamp', 'time', 'total_solved', 'total_avg'] + sum(self.args.continuous_feats, [])
         cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
@@ -145,11 +158,6 @@ class Preprocess:
             test = le.transform(df[col])
             df[col] = test
             
-
-        # def convert_time(s):
-        #     timestamp = time.mktime(datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple())
-        #     return int(timestamp)
-        
         #df['Timestamp'] = df['Timestamp'].apply(convert_time)
         
         return df
@@ -163,9 +171,11 @@ class Preprocess:
         df = pd.concat(final_df)
 
         # 문제 난이도 추가
-        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
-        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
-        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        if self.args.mode =='inference':
+            diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        elif self.args.mode == 'train':
+            diff_rate = df.groupby('difficulty').mean().reset_index()
         diff_rate = diff_rate[['difficulty','answerCode']]
         diff_rate = {key:value for key, value in diff_rate.values}
 
@@ -176,48 +186,27 @@ class Preprocess:
 
     def load_data_from_file(self, file_name, is_train=True):
         csv_file_path = os.path.join(self.args.data_dir, file_name) #
-        df = pd.read_csv(csv_file_path) #, nrows=100000)
+        df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
-                
-        self.args.n_questions = len(np.load(os.path.join(self.args.asset_dir,'assessmentItemID_classes.npy')))
-        self.args.n_test = len(np.load(os.path.join(self.args.asset_dir,'testId_classes.npy')))
-        self.args.n_tag = len(np.load(os.path.join(self.args.asset_dir,'KnowledgeTag_classes.npy')))
-        self.args.n_character = len(np.load(os.path.join(self.args.asset_dir,'character_classes.npy')))
-        self.args.n_difficulty = len(np.load(os.path.join(self.args.asset_dir,'difficulty_classes.npy')))
+        cate_embeddings = defaultdict(int)
+        for cate_name in self.args.categorical_feats:
+            cate_embeddings[cate_name] = len(np.load(os.path.join(self.args.asset_dir, cate_name + '_classes.npy')))
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
-        group = df[columns].groupby('userID').apply(
-                lambda r: (
-                    r['duration'].values,
-                    r['total_solved'].values,
-                    r['tag_solved'].values,
-                    r['testid_solved'].values,
-                    r['total_avg'].values,
-                    r['tag_avg'].values,
-                    r['testid_avg'].values,
+        val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+        group = df[columns].groupby('userID').apply(lambda r: ([r[i].values for i in val]))
 
-                    r['testId'].values, 
-                    r['assessmentItemID'].values,
-                    r['KnowledgeTag'].values,
-                    r['character'].values,
-                    r['difficulty'].values,
-                    r['answerCode'].values,
-                )
-            )
-
-        self.args.cont_cols = ['duration', 'total_solved', 'tag_solved', 'testid_solved', 'total_avg', 'tag_avg', 'testid_avg']
-
-        return group.values
+        return group.values, cate_embeddings
 
     def load_train_data(self, file_name):
-        self.train_data = self.load_data_from_file(file_name)
+        self.train_data, self.cate_embeddings = self.load_data_from_file(file_name)
 
     def load_test_data(self, file_name):
-        self.test_data = self.load_data_from_file(file_name, is_train= False)
+        self.test_data, self.cate_embeddings = self.load_data_from_file(file_name, is_train= False)
 
 
 class DKTDataset(torch.utils.data.Dataset):
@@ -227,32 +216,28 @@ class DKTDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         row = self.data[index]
-
         # 각 data의 sequence length
         seq_len = len(row[0])
-        duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg = row[0], row[1], row[2], row[3], row[4],row[5],row[6]
-        test, question, tag, character, difficulty, correct,= row[7], row[8], row[9], row[10], row[11],row[12]
-        
-        cate_cols = [duration, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, character, difficulty, correct]
-        
+        feat_cols = list(row)
+
         max_seq_len = random.randint(10, self.args.max_seq_len) if self.args.to_random_seq else self.args.max_seq_len #junho
 
         # max seq len을 고려하여서 이보다 길면 자르고 아닐 경우 그대로 냅둔다
         if seq_len > self.args.max_seq_len:
-            for i, col in enumerate(cate_cols):
-                cate_cols[i] = col[-max_seq_len:]
+            for i, col in enumerate(feat_cols):
+                feat_cols[i] = col[-max_seq_len:]
             mask = np.ones(self.args.max_seq_len, dtype=np.int16)
         else:
             mask = np.zeros(self.args.max_seq_len, dtype=np.int16)
             mask[-seq_len:] = 1
 
         # mask도 columns 목록에 포함시킴
-        cate_cols.append(mask)
+        feat_cols.append(mask)
 
         # np.array -> torch.tensor 형변환
-        for i, col in enumerate(cate_cols):
-            cate_cols[i] = torch.FloatTensor(col) if i in [j for j in range(len(self.args.cont_cols))] else torch.tensor(col)
-        return cate_cols
+        for i, col in enumerate(feat_cols):
+            feat_cols[i] = torch.FloatTensor(col) if i in [j for j in range(len(sum(self.args.continuous_feats, [])))] else torch.tensor(col)
+        return feat_cols
 
     def __len__(self):
         return len(self.data)
@@ -290,6 +275,6 @@ def get_loaders(args, train, valid):
     if valid is not None:
         valset = DKTDataset(valid, args)
         valid_loader = torch.utils.data.DataLoader(valset, num_workers=args.num_workers, shuffle=False,
-                            batch_size=64, pin_memory=pin_memory, collate_fn=collate)
+                            batch_size=256, pin_memory=pin_memory, collate_fn=collate)
 
     return train_loader, valid_loader
