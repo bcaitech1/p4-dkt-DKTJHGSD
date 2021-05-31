@@ -8,7 +8,7 @@ from .trainer import Trainer
 import wandb
 import math
 
-def run(args, train_data = None, valid_data = None, test_data = None):
+def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None):
     if args.mode == 'train':
         train_loader, valid_loader = get_loaders(args, train_data, valid_data)
         
@@ -17,11 +17,11 @@ def run(args, train_data = None, valid_data = None, test_data = None):
         args.one_step = math.ceil(len(train_loader.dataset) / args.batch_size) #junho
         #args.warmup_steps = args.total_steps // 10 
                 
-        model = get_model(args)
+        model = get_model(args, cate_embeddings)
         optimizer = get_optimizer(model, args)
         scheduler = call_scheduler(optimizer, args)
 
-        best_auc = -1
+        best_auc, best_epoch = -1, 1
         #early_stopping_counter = 0
         for epoch in range(args.n_epochs):
             ### TRAIN
@@ -38,7 +38,7 @@ def run(args, train_data = None, valid_data = None, test_data = None):
             wandb.log({"train_loss": train_loss, "train_auc": train_auc, "train_acc":train_acc,
                     "valid_loss" : eval_loss, "valid_auc":eval_auc, "valid_acc":eval_acc})
             if eval_auc > best_auc:
-                best_auc = eval_auc
+                best_auc, best_epoch = eval_auc, epoch+1
                 # torch.nn.DataParallel로 감싸진 경우 원래의 model을 가져옵니다.
                 model_to_save = model.module if hasattr(model, 'module') else model
                 if not os.path.exists(args.model_dir):
@@ -55,12 +55,12 @@ def run(args, train_data = None, valid_data = None, test_data = None):
             # scheduler
             if args.scheduler == 'plateau':
                 scheduler.step(best_auc)
-        print('='*50 + ' Training finished ' + '='*50)
+        print('='*50 + f' Training finished, best model found in epoch : {best_epoch} ' + '='*50)
     
     elif args.mode == 'inference':
         print("Start Inference")
         _, test_loader = get_loaders(args, None, test_data)
-        model = load_model(args, f'{args.save_name}.pt') #chanhyeong
+        model = load_model(args, f'{args.save_name}.pt', cate_embeddings) #chanhyeong
         inference = Trainer(args, model, test_dataset = test_loader) # junho
         inference.inference()
         print('='*50 + ' Inference finished ' + '='*50)

@@ -34,10 +34,7 @@ class Trainer(object): # junho
             for step, batch in enumerate(train_bar):
                 input = self.__process_batch(batch)
                 preds = self.model(input)
-                # targets = input[3] # correct
-                targets = batch[3]
-                targets = targets.type(torch.FloatTensor)
-                targets = targets.to(self.device)
+                targets = input[-1] # correct
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -95,10 +92,7 @@ class Trainer(object): # junho
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
                     preds = self.model(input)
-                    # targets = input[3] # correct
-                    targets = batch[3]
-                    targets = targets.type(torch.FloatTensor)
-                    targets = targets.to(self.device)
+                    targets = input[-1] # correct
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -161,10 +155,10 @@ class Trainer(object): # junho
 
     # 배치 전처리
     def __process_batch(self, batch):
-
-        test, question, tag, correct, duration, difficulty, mask = batch
-        #test, question, tag, correct, duration, mask = batch
-        
+        feats = batch[:-2]
+        mask = batch[-1]
+        correct = batch[-2]
+        batch_size = mask.size()[0]
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
@@ -175,36 +169,32 @@ class Trainer(object): # junho
         # 1을 틀림, 2를 맞음 으로 바꿔주는 작업. 아래 test, question, tag 같은 작업을 위해 모두 1을 더한다.
         interaction = correct + 1
         interaction = interaction.roll(shifts=1, dims=1)
-        interaction[:, 0] = 0 # set padding index to the first sequence
-        interaction = (interaction * mask).to(torch.int64)
+        interaction_mask = mask.roll(shifts=1, dims=1)
+        interaction_mask[:, 0] = 0
+        interaction = (interaction * interaction_mask).to(torch.int64)
+        
+        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+            batch_size, self.args.max_seq_len, self.args.max_seq_len
+        )
+        extended_mask = mask.unsqueeze(1)
+        extended_mask = extended_mask# * trg_mask
+        extended_mask = extended_mask.to(dtype=torch.float32)
+        extended_mask = (1.0 - extended_mask) * -10000.0
 
-        test = ((test + 1) * mask).to(torch.int64)
-        question = ((question + 1) * mask).to(torch.int64)
-        tag = ((tag + 1) * mask).to(torch.int64)
-        duration = ((duration + 1) * mask).to(torch.int64)
-        difficulty = ((difficulty + 1) * mask).to(torch.int64)
+        for i in range(len(feats)):
+            filt = len(sum(self.args.continuous_feats,[]))
+            if i >= filt:
+                feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
 
         # device memory로 이동
-        test = test.to(self.device)
-        question = question.to(self.device)
-
-        tag = tag.to(self.device)
-        #    correct = correct.to(args.device)
-        correct_adj = correct + 1
-        correct_adj = correct_adj.to(self.device)
-        mask = mask.to(self.device)
+        for i in range(len(feats)):
+            feats[i] = feats[i].to(self.device)
 
         interaction = interaction.to(self.device)
-        duration = duration.to(self.device)
-        difficulty = difficulty.to(self.device)
+        correct = correct.to(self.device)
+        mask = extended_mask.to(self.device)
 
-        return (test, question,
-                tag, correct_adj, mask,
-                interaction, duration, difficulty)
-
-        # return (test, question,
-        #         tag, correct, mask,
-        #         interaction, duration)
+        return feats + [mask, interaction, correct]
 
 
     # loss계산하고 parameter update!

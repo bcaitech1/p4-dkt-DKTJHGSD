@@ -19,7 +19,7 @@ def main(args):
     if args.mode == 'train': #junho
         wandb.login()
         preprocess.load_train_data(args.file_name)
-        train_data = preprocess.get_train_data()
+        train_data, cate_embeddings = preprocess.get_train_data()
         train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)  
         name = '(' + args.model + ')' + ' ' + get_timestamp()
         if args.sweep : #chanhyeong
@@ -30,13 +30,13 @@ def main(args):
             args.weight_decay=sweep_cfg.weight_decay
         else:
             wandb.init(project='dkt', config=vars(args), name = name)
-        run(args, train_data = train_data, valid_data = valid_data)
-        # shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 -> 폴더 경로가 달라서 일단 주석처리 했습니다.
+        run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings)
+        shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 
 
     elif args.mode =='inference': # junho
         preprocess.load_test_data(args.test_file_name)
-        test_data = preprocess.get_test_data()
-        run(args, test_data = test_data)
+        test_data, cate_embeddings = preprocess.get_test_data()
+        run(args, test_data = test_data, cate_embeddings = cate_embeddings)
     
 
 if __name__ == "__main__":
