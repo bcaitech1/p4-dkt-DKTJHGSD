@@ -155,9 +155,10 @@ class Trainer(object): # junho
 
     # 배치 전처리
     def __process_batch(self, batch):
-
-        duration, test, question, tag, character, difficulty, correct, mask = batch
-        
+        feats = batch[:-2]
+        mask = batch[-1]
+        correct = batch[-2]
+        batch_size = mask.size()[0]
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
@@ -171,29 +172,29 @@ class Trainer(object): # junho
         interaction_mask = mask.roll(shifts=1, dims=1)
         interaction_mask[:, 0] = 0
         interaction = (interaction * interaction_mask).to(torch.int64)
+        
+        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+            batch_size, self.args.max_seq_len, self.args.max_seq_len
+        )
+        extended_mask = mask.unsqueeze(1)
+        extended_mask = extended_mask# * trg_mask
+        extended_mask = extended_mask.to(dtype=torch.float32)
+        extended_mask = (1.0 - extended_mask) * -10000.0
 
-        test = ((test + 1) * mask).to(torch.int64)
-        question = ((question + 1) * mask).to(torch.int64)
-        tag = ((tag + 1) * mask).to(torch.int64)
-        character = ((character +1) * mask).to(torch.int64)
-        difficulty = ((difficulty + 1) * mask).to(torch.int64)
+        for i in range(len(feats)):
+            filt = len(sum(self.args.continuous_feats,[]))
+            if i >= filt:
+                feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
 
         # device memory로 이동
-        test = test.to(self.device)
-        question = question.to(self.device)
-        tag = tag.to(self.device)
-        correct = correct.to(self.device)
-        mask = mask.to(self.device)
+        for i in range(len(feats)):
+            feats[i] = feats[i].to(self.device)
+
         interaction = interaction.to(self.device)
-        character = character.to(self.device)
-        difficulty = difficulty.to(self.device)
+        correct = correct.to(self.device)
+        mask = extended_mask.to(self.device)
 
-        duration = duration.to(self.device)
-
-        return (duration, test, question,tag, mask,
-                interaction, character, difficulty, correct)
-
-
+        return feats + [mask, interaction, correct]
 
 
     # loss계산하고 parameter update!

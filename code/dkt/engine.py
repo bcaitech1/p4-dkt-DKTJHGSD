@@ -8,7 +8,7 @@ from .trainer import Trainer
 import wandb
 import math
 
-def run(args, train_data = None, valid_data = None, test_data = None):
+def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None):
     if args.mode == 'train':
         train_loader, valid_loader = get_loaders(args, train_data, valid_data)
         
@@ -17,7 +17,7 @@ def run(args, train_data = None, valid_data = None, test_data = None):
         args.one_step = math.ceil(len(train_loader.dataset) / args.batch_size) #junho
         #args.warmup_steps = args.total_steps // 10 
                 
-        model = get_model(args)
+        model = get_model(args, cate_embeddings)
         optimizer = get_optimizer(model, args)
         scheduler = call_scheduler(optimizer, args)
 
@@ -60,7 +60,7 @@ def run(args, train_data = None, valid_data = None, test_data = None):
     elif args.mode == 'inference':
         print("Start Inference")
         _, test_loader = get_loaders(args, None, test_data)
-        model = load_model(args, f'{args.save_name}.pt') #chanhyeong
+        model = load_model(args, f'{args.save_name}.pt', cate_embeddings) #chanhyeong
         inference = Trainer(args, model, test_dataset = test_loader) # junho
         inference.inference()
         print('='*50 + ' Inference finished ' + '='*50)
