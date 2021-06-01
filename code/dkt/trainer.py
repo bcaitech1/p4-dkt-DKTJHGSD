@@ -83,7 +83,6 @@ class Trainer(object): # junho
 
     def validate(self):
         self.model.eval()
-
         total_preds = []
         total_targets = []
         eval_loss = 0

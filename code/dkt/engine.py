@@ -18,6 +18,7 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
         #args.warmup_steps = args.total_steps // 10 
                 
         model = get_model(args, cate_embeddings)
+        #model.load_state_dict(torch.load('/opt/ml/p4-dkt-DKTJHGSD/code/models/default.pt'), strict=True) # 이어서 학습
         optimizer = get_optimizer(model, args)
         scheduler = call_scheduler(optimizer, args)
 
