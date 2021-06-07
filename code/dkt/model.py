@@ -511,8 +511,6 @@ class LastQuery(nn.Module):
         
         q = self.query(embed)[:, -1:, :].permute(1, 0, 2)
         
-        
-        
         k = self.key(embed).permute(1, 0, 2)
         v = self.value(embed).permute(1, 0, 2)
 

@@ -208,7 +208,7 @@ class Trainer(object): # junho
         return feats + [mask, interaction, correct]
 
 
-    # loss계산하고 parameter update!
+    # loss 계산하고 parameter update!
     def __compute_loss(self, preds, targets):
         """
         Args :
