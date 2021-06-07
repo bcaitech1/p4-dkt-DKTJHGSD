@@ -188,6 +188,7 @@ class Preprocess:
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
 
+        # mean, std
         df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
         df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
         df_test = df_test.loc[df.answerCode!=-1]
@@ -206,8 +207,6 @@ class Preprocess:
 
         # testId mean, std
         df['testId_mean'], df['testId_std'] = generate_mean_std(df, df_all, 'testId')
-
-        print(df)
 
         return df
 
