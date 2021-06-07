@@ -39,8 +39,7 @@ def convert_time(s):
     return timestamp
 
     
-
-def process_by_userid(x, grouped): # junho
+def process_by_userid(x, grouped): # junho, seoyoon
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     tmp = gp['Timestamp'].astype(str)
@@ -56,6 +55,20 @@ def process_by_userid(x, grouped): # junho
     gp['mday'] = timetuple.apply(lambda x:x.tm_wday) # 요일
     gp['hour'] = timetuple.apply(lambda x:x.tm_hour) # 시간
     
+    #frequency수치형
+    #frequency = gp[gp['time'] >= 60*60]['time'].count()
+    #if frequency > 40 & frequency < 170 :  
+    #    frequency= 100
+    #gp['frequency'] = frequency
+
+    """#frequency범주형
+    frequencyBin = gp[gp['time'] >= 60*60]['time'].count()
+    if frequencyBin > 170:  
+        frequencyBin=2
+    else: frequencyBin=1
+    gp['frequencyBin'] = frequencyBin"""
+
+
     # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)
     record = defaultdict(int)
     gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = 0, 0, 0
@@ -87,6 +100,7 @@ def process_by_userid(x, grouped): # junho
 
     gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = total_solved, tag_solved, testid_solved
     gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = total_avg, tag_avg, testid_avg
+
     return gp
 
 def use_all(dt, max_seq_len, slide):
@@ -98,6 +112,7 @@ def use_all(dt, max_seq_len, slide):
     #     check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
     #     new.append(check)
     return new
+
 
 class Preprocess:
     def __init__(self,args):
@@ -178,6 +193,7 @@ class Preprocess:
         df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
         df_test = df_test.loc[df.answerCode!=-1]
         df_all = pd.concat([df_train, df_test])
+        
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
         df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
