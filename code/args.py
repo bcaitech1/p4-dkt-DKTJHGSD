@@ -30,23 +30,26 @@ def parse_args():
     
     # 훈련
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
+    parser.add_argument('--kfold', default=5, type=int, help='utilize kfold') # junho
     parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight_decay',default=1e-3,type=float,help='weight decay') #changhyeong
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
-    #parser.add_argument('--patience', default=5, type=int, help='for early stopping')
+    parser.add_argument('--patience', default=4, type=int, help='for early stopping')
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
-    parser.add_argument('--slide_window', default=3, type=int) # junho
+    parser.add_argument('--slide_window', default=10, type=int) # junho
 
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
             default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['tag_mean', 'tag_std'], ['testId_mean', 'testId_std']], 
-            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty')
+            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_std, assId_mean, assId_std, \
+                    tag_mean, tag_std, testId_mean, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
+                    win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+', 
             default=['testId', 'assessmentItemID', 'KnowledgeTag', 'character', 'week_number', 'mday', 'hour'],
