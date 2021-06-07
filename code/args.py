@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
     
-    parser.add_argument('--max_seq_len', default=20, type=int, help='max sequence length')
+    parser.add_argument('--max_seq_len', default=10, type=int, help='max sequence length')
     parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
-    parser.add_argument('--slide_window', default=20, type=int) # junho
+    parser.add_argument('--slide_window', default=10, type=int) # junho
 
 
     # feature
