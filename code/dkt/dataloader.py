@@ -94,6 +94,16 @@ def use_all(dt, max_seq_len, slide):
     #     new.append(check)
     return new
 
+def kfold_useall_data(train, val, args):
+    # 모든 데이터 사용
+    train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    return train, val
+
 class Preprocess:
     def __init__(self,args):
         self.args = args
@@ -133,13 +143,10 @@ class Preprocess:
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train = True):
-        # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp', 'time'] + sum(self.args.continuous_feats, [])
-        cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
             
-        for col in cate_cols:   
+        for col in self.args.categorical_feats:   
             le = LabelEncoder()
             if is_train:
                 #For UNKNOWN class
@@ -189,13 +196,17 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        # csv_file_path = os.path.join(self.args.data_dir, file_name) #
-        # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        # df = self.__feature_engineering(df)
-        # df = self.__preprocessing(df, is_train)
-        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', mode='w') # dataframe csv파일로 저장
+        csv_file_path = os.path.join(self.args.data_dir, file_name) # 
+        df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        df = self.__feature_engineering(df)
+        df = self.__preprocessing(df, is_train)
+        
+        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
 
-        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv') # 저장한 dataframe 불러오기 
+        ## merged train,test
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        ## train df
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)

@@ -8,7 +8,7 @@ from .trainer import Trainer
 import wandb
 import math
 
-def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None):
+def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None, fold = None):
     if args.mode == 'train':
         train_loader, valid_loader = get_loaders(args, train_data, valid_data)
         
@@ -23,7 +23,9 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
         scheduler = call_scheduler(optimizer, args)
 
         best_auc, best_epoch = -1, 1
-        #early_stopping_counter = 0
+        if args.kfold:
+            print(f'Training fold : {fold}')
+            early_stopping_counter = 0
         for epoch in range(args.n_epochs):
             ### TRAIN
             trainer = Trainer(args, model, epoch+1, optimizer, scheduler, train_loader, valid_loader) # junho
@@ -35,23 +37,29 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
             print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {round(train_acc*100, 2)}% | Train AUC: {round(train_auc*100, 2)}%')
             print(f'\tValid Loss: {eval_loss:.3f} | Valid Acc: {round(eval_acc*100, 2)}% | Valid AUC: {round(eval_auc*100, 2)}%')
 
-            ### TODO: model save or early stopping
-            wandb.log({"train_loss": train_loss, "train_auc": train_auc, "train_acc":train_acc,
-                    "valid_loss" : eval_loss, "valid_auc":eval_auc, "valid_acc":eval_acc})
+            if args.kfold: 
+                wandb.log({f"k_{fold}_train_loss": train_loss, f"k_{fold}_train_auc": train_auc, f"k_{fold}_train_acc":train_acc,
+                        f"k_{fold}_valid_loss" : eval_loss, f"k_{fold}_valid_auc":eval_auc, f"k_{fold}_valid_acc":eval_acc})
+            else:
+                wandb.log({"train_loss": train_loss, "train_auc": train_auc, "train_acc":train_acc,
+                        "valid_loss" : eval_loss, "valid_auc":eval_auc, "valid_acc":eval_acc})
+
             if eval_auc > best_auc:
                 best_auc, best_epoch = eval_auc, epoch+1
                 # torch.nn.DataParallel로 감싸진 경우 원래의 model을 가져옵니다.
                 model_to_save = model.module if hasattr(model, 'module') else model
                 if not os.path.exists(args.model_dir):
-                    os.makedirs(args.model_dir)    
-                torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.save_name}.pt')) #chanhyeong
+                    os.makedirs(args.model_dir)
+                if args.kfold:    
+                    torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.save_name}_{fold}.pt')) #chanhyeong
+                else: torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.save_name}.pt'))
                 print('\tbetter model found, saving!')
-                #early_stopping_counter = 0
-            # else:
-            #     early_stopping_counter += 1
-            #     if early_stopping_counter >= args.patience:
-            #         print(f'EarlyStopping counter: {early_stopping_counter} out of {args.patience}')
-            #         break
+                early_stopping_counter = 0
+            else:
+                early_stopping_counter += 1
+                if early_stopping_counter >= args.patience:
+                    print(f'EarlyStopping counter: {early_stopping_counter} out of {args.patience}')
+                    break
 
             # scheduler
             if args.scheduler == 'plateau':
@@ -61,8 +69,11 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
     elif args.mode == 'inference':
         print("Start Inference")
         _, test_loader = get_loaders(args, None, test_data)
-        model = load_model(args, f'{args.save_name}.pt', cate_embeddings) #chanhyeong
-        inference = Trainer(args, model, test_dataset = test_loader) # junho
+        if args.kfold:
+            model = load_model(args, f'{args.save_name}_{fold}.pt', cate_embeddings)
+        else: 
+            model = load_model(args, f'{args.save_name}.pt', cate_embeddings) #chanhyeong
+        inference = Trainer(args, model, test_dataset = test_loader, fold = fold) # junho
         inference.inference()
         print('='*50 + ' Inference finished ' + '='*50)
 
