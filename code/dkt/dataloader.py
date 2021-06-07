@@ -33,9 +33,12 @@ def get_character(x):
     else :
         return 'I'
 
+
 def convert_time(s):
     timestamp = datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple()
     return timestamp
+
+    
 
 def process_by_userid(x, grouped): # junho
     gp = grouped.get_group(int(x))
@@ -171,23 +174,76 @@ class Preprocess:
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
 
-        # 문제 난이도 추가
-        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
-        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
-        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        diff_rate = diff_rate[['difficulty','answerCode']]
-        diff_rate = {key:value for key, value in diff_rate.values}
-
-        # df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        # if self.args.mode =='inference':
-        #     diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        # elif self.args.mode == 'train':
-        #     diff_rate = df.groupby('difficulty').mean().reset_index()
-        # diff_rate = diff_rate[['difficulty','answerCode']]
-        # diff_rate = {key:value for key, value in diff_rate.values}
-
+        df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
+        df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
+        df_test = df_test.loc[df.answerCode!=-1]
+        df_all = pd.concat([df_train, df_test])
+        # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
+        df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
+
+        diff_mean = df_all.groupby('difficulty')['answerCode'].mean().reset_index()
+        diff_std = df_all.groupby('difficulty')['answerCode'].std().reset_index()
+
+        diff_mean = {key:value for key, value in diff_mean.values}
+        diff_std = {key:value for key, value in diff_std.values}
+
+        df['difficulty_mean'] = df['difficulty'].apply(lambda x: diff_mean[x])
+        df['difficulty_std'] = df['difficulty'].apply(lambda x: diff_std[x])
+
+        # assessmentItemID mean, std
+        #if self.args.mode =='inference':
+        #    assId_mean = df.loc[df.answerCode!=-1].groupby('assessmentItemID')['answerCode'].mean().reset_index()
+            #assId_std = df.loc[df.answerCode!=-1].groupby('assessmentItemID')['answerCode'].std().reset_index()
+        #elif self.args.mode == 'train':
+        #    assId_mean = df.groupby('assessmentItemID')['answerCode'].mean().reset_index()
+            #assId_std = df.groupby('assessmentItemID')['answerCode'].std().reset_index()
+        #assId_std = assId_std.fillna(0)
+
+        assId_mean = df_all.groupby('assessmentItemID')['answerCode'].mean().reset_index()
+        assId_std = df_all.groupby('assessmentItemID')['answerCode'].std().reset_index()
+            
+        assId_mean = {key:value for key, value in assId_mean.values}
+        assId_std = {key:value for key, value in assId_std.values}
+
+        df['assId_mean'] = df['assessmentItemID'].apply(lambda x: assId_mean[x])
+        df['assId_std'] = df['assessmentItemID'].apply(lambda x: assId_std[x])
+
+
+        # tag mean, std
+        """if self.args.mode =='inference':
+            tag_mean = df.loc[df.answerCode!=-1].groupby('KnowledgeTag')['answerCode'].mean().reset_index()
+            tag_std = df.loc[df.answerCode!=-1].groupby('KnowledgeTag')['answerCode'].std().reset_index()
+        elif self.args.mode == 'train':
+            tag_mean = df.groupby('KnowledgeTag')['answerCode'].mean().reset_index()
+            tag_std = df.groupby('KnowledgeTag')['answerCode'].std().reset_index()"""
+
+        tag_mean = df_all.groupby('KnowledgeTag')['answerCode'].mean().reset_index()
+        tag_std = df_all.groupby('KnowledgeTag')['answerCode'].std().reset_index()
+
+        tag_mean = {key:value for key, value in tag_mean.values}
+        tag_std = {key:value for key, value in tag_std.values}
+
+        df['tag_mean'] = df['KnowledgeTag'].apply(lambda x: tag_mean[x])
+        df['tag_std'] = df['KnowledgeTag'].apply(lambda x: tag_std[x])
+
+        # testId mean, std
+        """if self.args.mode =='inference':
+            testId_mean = df.loc[df.answerCode!=-1].groupby('testId')['answerCode'].mean().reset_index()
+            testId_std = df.loc[df.answerCode!=-1].groupby('testId')['answerCode'].std().reset_index()
+        elif self.args.mode == 'train':
+            testId_mean = df.groupby('testId')['answerCode'].mean().reset_index()
+            testId_std = df.groupby('testId')['answerCode'].std().reset_index()"""
+
+        testId_mean = df_all.groupby('testId')['answerCode'].mean().reset_index()
+        testId_std = df_all.groupby('testId')['answerCode'].std().reset_index()
+
+        testId_mean = {key:value for key, value in testId_mean.values}
+        testId_std = {key:value for key, value in testId_std.values}
+
+        df['testId_mean'] = df['testId'].apply(lambda x: testId_mean[x])
+        df['testId_std'] = df['testId'].apply(lambda x: testId_std[x])
+
 
         return df
 
