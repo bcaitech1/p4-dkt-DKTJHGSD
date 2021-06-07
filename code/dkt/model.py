@@ -26,53 +26,17 @@ class LSTM(nn.Module):
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-<<<<<<< HEAD
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
-=======
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//3) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim//3)
-        self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
-        self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
-        self.embedding_character = nn.Embedding(self.args.n_character + 1, self.hidden_dim//3)
-        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
-        #self.embedding_frequencyBin = nn.Embedding(self.args.n_frequencyBin + 1, self.hidden_dim//3)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
-<<<<<<< HEAD
 
         # # embedding combination projection
         self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
-=======
-        # 수치형 Embedding
-        self.embedding_duration = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_frequency = nn.Sequential(nn.Linear(1, self.hidden_dim//3), 
-                                                nn.LayerNorm(self.hidden_dim//3))                                
-        
-        # self.embedding_total_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        # self.embedding_total_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-
-
-        # # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//3)*12, self.hidden_dim)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -101,19 +65,13 @@ class LSTM(nn.Module):
         return (h, c)
 
     def forward(self, input):
-<<<<<<< HEAD
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
         cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
-=======
-        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, mask, interaction, character, difficulty, _ = input
-
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
         batch_size = interaction.size(0)
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-<<<<<<< HEAD
         embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
 
         # 연속형 Embedding
@@ -121,44 +79,6 @@ class LSTM(nn.Module):
         embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
         
         embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
-=======
-        embed_test = self.embedding_test(test)
-        embed_question = self.embedding_question(question)
-        embed_tag = self.embedding_tag(tag)
-        embed_character = self.embedding_character(character)
-        embed_difficulty = self.embedding_difficulty(difficulty)
-        #embed_frequencyBin = self.embedding_frequencyBin(frequencyBin)
-
-        # 수치형 embedding
-        embed_duration = self.embedding_duration(duration.unsqueeze(2)) # duration to [batch, seq, # cont features]
-        embed_frequency = self.embedding_frequency(frequency.unsqueeze(2))
-        #embed_total_s = self.embedding_total_s(total_s.unsqueeze(2))
-        embed_tag_s = self.embedding_tag_s(tag_s.unsqueeze(2))
-        embed_testid_s = self.embedding_testid_s(testid_s.unsqueeze(2))
-        #embed_total_avg = self.embedding_total_avg(total_avg.unsqueeze(2))
-        embed_tag_avg = self.embedding_tag_avg(tag_avg.unsqueeze(2))
-        embed_testid_avg = self.embedding_testid_avg(testid_avg.unsqueeze(2))
-
-        embed = torch.cat([embed_interaction,
-                           embed_test,
-                           embed_question,
-                           embed_tag,
-                           embed_character,
-                           embed_difficulty,
-                           #embed_frequencyBin,
-
-                           embed_duration,
-                           embed_frequency,
-                           #embed_total_s,
-                           embed_tag_s,
-                           embed_testid_s,
-                           #embed_total_avg,
-                           embed_tag_avg,
-                           embed_testid_avg
-                           ],2)
-
-
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         X = self.comb_proj(embed)
 
@@ -191,53 +111,17 @@ class LSTMATTN(nn.Module):
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-<<<<<<< HEAD
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
-=======
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//3) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim//3)
-        self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
-        self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
-        self.embedding_character = nn.Embedding(self.args.n_character + 1, self.hidden_dim//3)
-        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
-        #self.embedding_frequencyBin = nn.Embedding(self.args.n_frequencyBin + 1, self.hidden_dim//3)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
-<<<<<<< HEAD
 
         # # embedding combination projection
         self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
-=======
-        # 수치형 Embedding
-        self.embedding_duration = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_frequency = nn.Sequential(nn.Linear(1, self.hidden_dim//3), 
-                                                nn.LayerNorm(self.hidden_dim//3))                                
-        
-        # self.embedding_total_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        # self.embedding_total_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-
-
-        # # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//3)*12, self.hidden_dim)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         self.lstm = nn.LSTM(self.hidden_dim,
                             self.hidden_dim,
@@ -277,58 +161,15 @@ class LSTMATTN(nn.Module):
 
         return (h, c)
 
-<<<<<<< HEAD
     def forward(self, input):        
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
         cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
-=======
-    def forward(self, input):
-        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, mask, interaction, character, difficulty, _ = input
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
         batch_size = interaction.size(0)
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-<<<<<<< HEAD
         embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
-=======
-        embed_test = self.embedding_test(test)
-        embed_question = self.embedding_question(question)
-        embed_tag = self.embedding_tag(tag)
-        embed_character = self.embedding_character(character)
-        embed_difficulty = self.embedding_difficulty(difficulty)
-        #embed_frequencyBin = self.embedding_frequencyBin(frequencyBin)
-
-        # 수치형 embedding
-        embed_duration = self.embedding_duration(duration.unsqueeze(2)) # duration to [batch, seq, # cont features]
-        embed_frequency = self.embedding_frequency(frequency.unsqueeze(2))
-        #embed_total_s = self.embedding_total_s(total_s.unsqueeze(2))
-        embed_tag_s = self.embedding_tag_s(tag_s.unsqueeze(2))
-        embed_testid_s = self.embedding_testid_s(testid_s.unsqueeze(2))
-        #embed_total_avg = self.embedding_total_avg(total_avg.unsqueeze(2))
-        embed_tag_avg = self.embedding_tag_avg(tag_avg.unsqueeze(2))
-        embed_testid_avg = self.embedding_testid_avg(testid_avg.unsqueeze(2))
-
-        embed = torch.cat([embed_interaction,
-                           embed_test,
-                           embed_question,
-                           embed_tag,
-                           embed_character,
-                           embed_difficulty,
-                           #embed_frequencyBin,
-
-                           embed_duration,
-                           embed_frequency,
-                           #embed_total_s,
-                           embed_tag_s,
-                           embed_testid_s,
-                           #embed_total_avg,
-                           embed_tag_avg,
-                           embed_testid_avg
-                           ],2)
-
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
@@ -375,53 +216,17 @@ class Bert(nn.Module):
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-<<<<<<< HEAD
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
-=======
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//3) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim//3)
-        self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
-        self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
-        self.embedding_character = nn.Embedding(self.args.n_character + 1, self.hidden_dim//3)
-        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
-        #self.embedding_frequencyBin = nn.Embedding(self.args.n_frequencyBin + 1, self.hidden_dim//3)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
-<<<<<<< HEAD
 
         # # embedding combination projection
         self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
-=======
-        # 수치형 Embedding
-        self.embedding_duration = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_frequency = nn.Sequential(nn.Linear(1, self.hidden_dim//3), 
-                                                nn.LayerNorm(self.hidden_dim//3))                                
-        
-        # self.embedding_total_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        # self.embedding_total_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-
-
-        # # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//3)*12, self.hidden_dim)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # Bert config
         self.config = BertConfig(
@@ -442,56 +247,14 @@ class Bert(nn.Module):
         self.activation = nn.Sigmoid()
 
     def forward(self, input):
-<<<<<<< HEAD
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
         cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
-=======
-        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, mask, interaction, character, difficulty, _ = input
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
         batch_size = interaction.size(0)
 
         # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-<<<<<<< HEAD
         embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
-=======
-        embed_test = self.embedding_test(test)
-        embed_question = self.embedding_question(question)
-        embed_tag = self.embedding_tag(tag)
-        embed_character = self.embedding_character(character)
-        embed_difficulty = self.embedding_difficulty(difficulty)
-        #embed_frequencyBin = self.embedding_frequencyBin(frequencyBin)
-
-        # 수치형 embedding
-        embed_duration = self.embedding_duration(duration.unsqueeze(2)) # duration to [batch, seq, # cont features]
-        embed_frequency = self.embedding_frequency(frequency.unsqueeze(2))
-        #embed_total_s = self.embedding_total_s(total_s.unsqueeze(2))
-        embed_tag_s = self.embedding_tag_s(tag_s.unsqueeze(2))
-        embed_testid_s = self.embedding_testid_s(testid_s.unsqueeze(2))
-        #embed_total_avg = self.embedding_total_avg(total_avg.unsqueeze(2))
-        embed_tag_avg = self.embedding_tag_avg(tag_avg.unsqueeze(2))
-        embed_testid_avg = self.embedding_testid_avg(testid_avg.unsqueeze(2))
-
-        embed = torch.cat([embed_interaction,
-                           embed_test,
-                           embed_question,
-                           embed_tag,
-                           embed_character,
-                           embed_difficulty,
-                           #embed_frequencyBin,
-
-                           embed_duration,
-                           embed_frequency,
-                           #embed_total_s,
-                           embed_tag_s,
-                           embed_testid_s,
-                           #embed_total_avg,
-                           embed_tag_avg,
-                           embed_testid_avg
-                           ],2)
-
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
@@ -527,26 +290,14 @@ class ConvBert(nn.Module): # chanhyeong
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-<<<<<<< HEAD
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
-=======
-        # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//3) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim//3)
-        self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim//3)
-        self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim//3)
-        self.embedding_character = nn.Embedding(self.args.n_character + 1, self.hidden_dim//3)
-        self.embedding_difficulty = nn.Embedding(self.args.n_difficulty + 1, self.hidden_dim//3)
-        #self.embedding_frequencyBin = nn.Embedding(self.args.n_frequencyBin + 1, self.hidden_dim//3)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
-<<<<<<< HEAD
 
         # # embedding combination projection
         self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
@@ -559,30 +310,6 @@ class ConvBert(nn.Module): # chanhyeong
         
         # Fully connected layer
         self.fc = nn.Linear(self.hidden_dim * (2 if self.args.bidirectional else 1), 1)
-=======
-        # 수치형 Embedding
-        self.embedding_duration = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_frequency = nn.Sequential(nn.Linear(1, self.hidden_dim//3), 
-                                                nn.LayerNorm(self.hidden_dim//3))                                
-        
-        # self.embedding_total_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_s = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        # self.embedding_total_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-        #                                         nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_tag_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-        self.embedding_testid_avg = nn.Sequential(nn.Linear(1, self.hidden_dim//3), # 연속형 feature = duration 1개 so in_features == 1
-                                                nn.LayerNorm(self.hidden_dim//3))
-
-
-        # # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//3)*12, self.hidden_dim)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # Bert config
         self.config = BertConfig( 
@@ -605,57 +332,15 @@ class ConvBert(nn.Module): # chanhyeong
         self.activation = nn.Sigmoid()
 
 
-<<<<<<< HEAD
     def forward(self, input):        
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
         cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
-=======
-    def forward(self, input):
-        duration, frequency, total_s, tag_s, testid_s, total_avg, tag_avg, testid_avg, test, question, tag, mask, interaction, character, difficulty, _ = input
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
         batch_size = interaction.size(0)
 
        # 범주형 Embedding
         embed_interaction = self.embedding_interaction(interaction)
-<<<<<<< HEAD
         embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
-=======
-        embed_test = self.embedding_test(test)
-        embed_question = self.embedding_question(question)
-        embed_tag = self.embedding_tag(tag)
-        embed_character = self.embedding_character(character)
-        embed_difficulty = self.embedding_difficulty(difficulty)
-        #embed_frequencyBin = self.embedding_frequencyBin(frequencyBin)
-
-        # 수치형 embedding
-        embed_duration = self.embedding_duration(duration.unsqueeze(2)) # duration to [batch, seq, # cont features]
-        embed_frequency = self.embedding_frequency(frequency.unsqueeze(2))
-        #embed_total_s = self.embedding_total_s(total_s.unsqueeze(2))
-        embed_tag_s = self.embedding_tag_s(tag_s.unsqueeze(2))
-        embed_testid_s = self.embedding_testid_s(testid_s.unsqueeze(2))
-        #embed_total_avg = self.embedding_total_avg(total_avg.unsqueeze(2))
-        embed_tag_avg = self.embedding_tag_avg(tag_avg.unsqueeze(2))
-        embed_testid_avg = self.embedding_testid_avg(testid_avg.unsqueeze(2))
-
-        embed = torch.cat([embed_interaction,
-                           embed_test,
-                           embed_question,
-                           embed_tag,
-                           embed_character,
-                           embed_difficulty,
-                           #embed_frequencyBin,
-
-                           embed_duration,
-                           embed_frequency,
-                           #embed_total_s,
-                           embed_tag_s,
-                           embed_testid_s,
-                           #embed_total_avg,
-                           embed_tag_avg,
-                           embed_testid_avg
-                           ],2)
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
 
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]

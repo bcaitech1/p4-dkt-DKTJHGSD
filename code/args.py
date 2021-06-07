@@ -30,17 +30,10 @@ def parse_args():
     
     # 훈련
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
-<<<<<<< HEAD
     parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight_decay',default=1e-3,type=float,help='weight decay') #changhyeong
-=======
-    parser.add_argument('--n_epochs', default=25, type=int, help='number of epochs')
-    parser.add_argument('--batch_size', default=32, type=int, help='batch size')
-    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
-    parser.add_argument('--weight_decay',default=0.001,type=float,help='weight decay') #changhyeong
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
     #parser.add_argument('--patience', default=5, type=int, help='for early stopping')
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
@@ -52,7 +45,7 @@ def parse_args():
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
-            default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean', 'assId_std'], ['tag_mean', 'tag_std'], ['testId_mean', 'testId_std']], 
+            default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['tag_mean', 'tag_std'], ['testId_mean', 'testId_std']], 
             help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+', 
@@ -60,11 +53,7 @@ def parse_args():
             help = 'testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
-<<<<<<< HEAD
     parser.add_argument('--model', default='lstmattn', type=str, help='model type')
-=======
-    parser.add_argument('--model', default='lstm', type=str, help='model type')
->>>>>>> 5994e3671b29ce2998d22ec3ea96ca0190d6038b
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type') # [plateau, steplr, cosine, linear]
     parser.add_argument('--mode', default='train', type=str, help='train or inference') # junho
