@@ -56,8 +56,8 @@ def process_by_userid(x, grouped, args): # junho
     # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
     record = defaultdict(list)
     c_record = defaultdict(int)
-    gp['acc_tag_solved'], gp['acc_testid_solved'], gp['acc_tag_avg'], gp['acc_testid_avg']   = 0, 0, 0, 0
-    gp['win_tag_solved'], gp['win_testid_solved'], gp['win_tag_avg'], gp['win_testid_avg']   = 0, 0, 0, 0
+    gp['acc_tag_solved'], gp['acc_testid_solved'], gp['acc_tag_avg'], gp['acc_testid_avg']  = 0, 0, 0, 0
+    gp['win_tag_solved'], gp['win_testid_solved'], gp['win_tag_avg'], gp['win_testid_avg']  = 0, 0, 0, 0
     filt = []
     for i in range(len(gp)):
         for type_ in ['acc','win']:
@@ -99,10 +99,22 @@ def kfold_useall_data(train, val, args):
     train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
                 train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= 20), 
                 val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
     return train, val
+
+def generate_mean_std(df, df_all, x):
+    x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
+    x_std = df_all.groupby(x)['answerCode'].std().reset_index()
+
+    x_mean = {key:value for key, value in x_mean.values}
+    x_std = {key:value for key, value in x_std.values}
+
+    df_mean = df[x].apply(lambda x: x_mean[x])
+    df_std = df[x].apply(lambda x: x_std[x])
+
+    return df_mean, df_std
 
 class Preprocess:
     def __init__(self,args):
@@ -133,7 +145,7 @@ class Preprocess:
         data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
                     data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=20), 
                     data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
         return data_1, data_2
@@ -175,29 +187,31 @@ class Preprocess:
         final_df = parmap.map(partial(process_by_userid, grouped = grouped, args=self.args), 
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
-        # 문제 난이도 추가
-        # test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
-        # test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
-        # diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        # diff_rate = diff_rate[['difficulty','answerCode']]
-        # diff_rate = {key:value for key, value in diff_rate.values}
-
+        
+        # mean, std
+        df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
+        df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
+        df_test = df_test.loc[df.answerCode!=-1]
+        df_all = pd.concat([df_train, df_test])
+        
+        # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        if self.args.mode =='inference':
-            diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        elif self.args.mode == 'train':
-            diff_rate = df.groupby('difficulty').mean().reset_index()
-        diff_rate = diff_rate[['difficulty','answerCode']]
-        diff_rate = {key:value for key, value in diff_rate.values}
+        df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
+        df['difficulty_mean'], df['difficulty_std'] = generate_mean_std(df, df_all, 'difficulty')
 
-        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
+        # assessmentItemID mean, std
+        df['assId_mean'], df['assId_std'] = generate_mean_std(df, df_all, 'assessmentItemID')
+        # tag mean, std
+        df['tag_mean'], df['tag_std'] = generate_mean_std(df, df_all, 'KnowledgeTag')
+        # testId mean, std
+        df['testId_mean'], df['testId_std'] = generate_mean_std(df, df_all, 'testId')
 
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
         # csv_file_path = os.path.join(self.args.data_dir, file_name) # 
         # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        # df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) #, nrows=100000)
         # df = self.__feature_engineering(df)
         # df = self.__preprocessing(df, is_train)
         
