@@ -23,7 +23,7 @@ def parse_args():
     # 모델
     parser.add_argument('--hidden_dim', default=300, type=int, help='hidden dimension size')
     parser.add_argument('--hd_divider', default=15, type=int, help='hidden dimension divider')
-    parser.add_argument('--n_layers', default=3, type=int, help='number of layers')
+    parser.add_argument('--n_layers', default=2, type=int, help='number of layers')
     parser.add_argument('--n_heads', default=2, type=int, help='number of heads')
     parser.add_argument('--drop_out', default=0.2, type=float, help='drop out rate')
     parser.add_argument('--bidirectional', default=True, type=bool, help='bi or uni directional')
