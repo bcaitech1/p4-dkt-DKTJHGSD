@@ -196,6 +196,8 @@ class Trainer(object): # junho
             filt = len(sum(self.args.continuous_feats,[]))
             if i >= filt:
                 feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
+            else:
+                feats[i] = ((feats[i] + 1) * mask)
 
         # device memory로 이동
         for i in range(len(feats)):
