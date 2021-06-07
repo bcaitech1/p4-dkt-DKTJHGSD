@@ -37,7 +37,7 @@ def convert_time(s):
     timestamp = datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple()
     return timestamp
 
-def process_by_userid(x, grouped): # junho
+def process_by_userid(x, grouped, args): # junho
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     tmp = gp['Timestamp'].astype(str)
@@ -53,48 +53,56 @@ def process_by_userid(x, grouped): # junho
     gp['mday'] = timetuple.apply(lambda x:x.tm_wday) # 요일
     gp['hour'] = timetuple.apply(lambda x:x.tm_hour) # 시간
     
-    # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)
-    record = defaultdict(int)
-    gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = 0, 0, 0
-    gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = 0, 0, 0
-    total_avg, tag_avg, testid_avg, total_solved, tag_solved, testid_solved, flag = [], [], [], [], [], [], 0
+    # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
+    record = defaultdict(list)
+    c_record = defaultdict(int)
+    gp['acc_tag_solved'], gp['acc_testid_solved'], gp['acc_tag_avg'], gp['acc_testid_avg']   = 0, 0, 0, 0
+    gp['win_tag_solved'], gp['win_testid_solved'], gp['win_tag_avg'], gp['win_testid_avg']   = 0, 0, 0, 0
+    filt = []
     for i in range(len(gp)):
-        if gp['time'].iloc[i] > 30*24*60*60:
-            flag = 1
-        elif flag == 1:
-            record, flag = defaultdict(int), 0
+        for type_ in ['acc','win']:
+            for col in ['KnowledgeTag','testId']:
+                record[type_+col+'avg'].append(float(round((c_record[type_+str(gp[col].iloc[i])+'cor']/c_record[type_+str(gp[col].iloc[i])])*100, 2)) if c_record[type_+str(gp[col].iloc[i])] != 0 else 0)
+                record[type_+col+'solved'].append(c_record[type_+str(gp[col].iloc[i])])
+                c_record[type_+str(gp[col].iloc[i])] += 1
+                if gp['answerCode'].iloc[i] == 1:
+                    c_record[type_+str(gp[col].iloc[i])+'cor'] += 1
+            if type_ == 'win':
+                filt.append([gp['KnowledgeTag'].iloc[i], gp['testId'].iloc[i], gp['answerCode'].iloc[i]])
+                if i >= args.max_seq_len:
+                    tmp_know, tmp_testid, res = filt.pop(0)
+                    c_record[type_+str(tmp_know)] -= 1
+                    c_record[type_+str(tmp_testid)] -= 1
+                    if res == 1:
+                        c_record[type_+str(tmp_know)+'cor'] -= 1
+                        c_record[type_+str(tmp_testid)+'cor'] -= 1
+                        
+    gp['acc_tag_solved'], gp['acc_testid_solved']  = record['accKnowledgeTagsolved'], record['acctestIdsolved']
+    gp['acc_tag_avg'], gp['acc_testid_avg'] = record['accKnowledgeTagavg'], record['acctestIdavg']
+    gp['win_tag_solved'], gp['win_testid_solved'] = record['winKnowledgeTagsolved'], record['wintestIdsolved']
+    gp['win_tag_avg'], gp['win_testid_avg'] =record['winKnowledgeTagavg'], record['wintestIdavg']
 
-        total_avg.append(float(round((record['total_correct']/record['total_solved'])*100, 2)) if record['total_solved'] != 0 else 0)
-        tag_avg.append(float(round((record[str(gp['KnowledgeTag'].iloc[i])+'cor']/record[gp['KnowledgeTag'].iloc[i]])*100, 2)) if record[gp['KnowledgeTag'].iloc[i]] != 0 else 0)
-        testid_avg.append(float(round((record[str(gp['testId'].iloc[i])+'cor']/record[gp['testId'].iloc[i]])*100,2)) if record[gp['testId'].iloc[i]] != 0 else 0)
-
-        total_solved.append(record['total_solved'])
-        record['total_solved'] += 1
-
-        tag_solved.append(record[gp['KnowledgeTag'].iloc[i]])
-        record[gp['KnowledgeTag'].iloc[i]] += 1
-
-        testid_solved.append(record[gp['testId'].iloc[i]])
-        record[gp['testId'].iloc[i]] += 1
-
-        if gp['answerCode'].iloc[i] == 1:
-            record['total_correct'] += 1
-            record[str(gp['KnowledgeTag'].iloc[i])+'cor'] += 1
-            record[str(gp['testId'].iloc[i])+'cor'] += 1
-
-    gp['total_solved'], gp['tag_solved'], gp['testid_solved']  = total_solved, tag_solved, testid_solved
-    gp['total_avg'], gp['tag_avg'], gp['testid_avg']  = total_avg, tag_avg, testid_avg
     return gp
 
 def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
-    new =[tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]]) for i in range(0, seq_len, max_seq_len//slide)]
+    new =[tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]]) for i in range(0, seq_len-8, max_seq_len//slide)]
     # new=[]
     # for i in range(0, seq_len, max_seq_len//slide):
     #     check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
     #     new.append(check)
     return new
+
+def kfold_useall_data(train, val, args):
+    # 모든 데이터 사용
+    train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    return train, val
 
 class Preprocess:
     def __init__(self,args):
@@ -135,13 +143,10 @@ class Preprocess:
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train = True):
-        # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp', 'time', 'total_solved', 'total_avg'] + sum(self.args.continuous_feats, [])
-        cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
             
-        for col in cate_cols:   
+        for col in self.args.categorical_feats:   
             le = LabelEncoder()
             if is_train:
                 #For UNKNOWN class
@@ -167,24 +172,23 @@ class Preprocess:
         # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
-        final_df = parmap.map(partial(process_by_userid, grouped = grouped), 
+        final_df = parmap.map(partial(process_by_userid, grouped = grouped, args=self.args), 
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
-
         # 문제 난이도 추가
-        test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
-        test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
-        diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        diff_rate = diff_rate[['difficulty','answerCode']]
-        diff_rate = {key:value for key, value in diff_rate.values}
-
-        # df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        # if self.args.mode =='inference':
-        #     diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        # elif self.args.mode == 'train':
-        #     diff_rate = df.groupby('difficulty').mean().reset_index()
+        # test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
+        # test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
+        # diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
         # diff_rate = diff_rate[['difficulty','answerCode']]
         # diff_rate = {key:value for key, value in diff_rate.values}
+
+        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        if self.args.mode =='inference':
+            diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
+        elif self.args.mode == 'train':
+            diff_rate = df.groupby('difficulty').mean().reset_index()
+        diff_rate = diff_rate[['difficulty','answerCode']]
+        diff_rate = {key:value for key, value in diff_rate.values}
 
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
         df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
@@ -192,13 +196,17 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        csv_file_path = os.path.join(self.args.data_dir, file_name) #
+        csv_file_path = os.path.join(self.args.data_dir, file_name) # 
         df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
         
-        #df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', mode='w') # dataframe csv파일로 저장
-        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv') # 저장한 dataframe 불러오기 
+        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
+
+        ## merged train,test
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        ## train df
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)

@@ -131,17 +131,17 @@ class LSTMATTN(nn.Module):
 
         self.config = BertConfig(
             3,  # not used
-            hidden_size=self.hidden_dim  * (2 if self.bidirectional else 1),
+            hidden_size=self.hidden_dim  *(2 if self.bidirectional else 1),
             num_hidden_layers=1,
             num_attention_heads=self.n_heads,
-            intermediate_size=self.hidden_dim * (2 if self.bidirectional else 1),
+            intermediate_size=self.hidden_dim *(2 if self.bidirectional else 1),
             hidden_dropout_prob=self.drop_out,
             attention_probs_dropout_prob=self.drop_out,
         )
         self.attn = BertEncoder(self.config)
 
         # Fully connected layer
-        self.fc = nn.Linear(self.hidden_dim * (2 if self.bidirectional else 1), 1)
+        self.fc = nn.Linear(self.hidden_dim *(2 if self.bidirectional else 1), 1)
 
         self.activation = nn.Sigmoid()
 
@@ -179,7 +179,7 @@ class LSTMATTN(nn.Module):
 
         # hidden = self.init_hidden(batch_size)
         out, hidden = self.lstm(X)#, hidden)
-        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.bidirectional else 1))
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim *(2 if self.bidirectional else 1))
 
         # extended_attention_mask = mask.unsqueeze(1).unsqueeze(2)
         # extended_attention_mask = extended_attention_mask.to(dtype=torch.float32)
@@ -380,6 +380,169 @@ class ConvBert(nn.Module): # chanhyeong
         return preds
 
 
+# seoyoon
+
+class Feed_Forward_block(nn.Module):
+    """
+    out =  Relu( M_out*w1 + b1) *w2 + b2
+    """
+    def __init__(self, dim_ff):
+        super().__init__()
+        self.layer1 = nn.Linear(in_features=dim_ff, out_features=dim_ff)
+        self.layer2 = nn.Linear(in_features=dim_ff, out_features=dim_ff)
+
+    def forward(self,ffn_in):
+        return self.layer2(F.relu(self.layer1(ffn_in)))
+
+class LastQuery(nn.Module):  
+    def __init__(self, args, cate_embeddings):
+        super(LastQuery, self).__init__()
+        self.args = args
+        self.hidden_dim = self.args.hidden_dim
+        self.n_layers = self.args.n_layers
+        self.n_heads = self.args.n_heads
+        self.drop_out = self.args.drop_out
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.bidirectional = args.bidirectional
+        self.hd_div = args.hd_divider
+        self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
+        self.num_each_cont = [len(i) for i in self.args.continuous_feats]
+        self.each_cont_idx = [[0, self.num_each_cont[0]]]
+
+        
+        # Embedding 
+        # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
+        for i in range(1, len(self.num_each_cont)):
+            self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
+
+        # # 범주형 Embedding 
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
+
+        # 연속형 Embedding
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
+
+
+        # # embedding combination projection
+        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
+
+
+        # 기존 keetar님 솔루션에서는 Positional Embedding은 사용되지 않습니다
+        # 하지만 사용 여부는 자유롭게 결정해주세요 :)
+        #self.embedding_position = nn.Embedding(self.args.max_seq_len, self.hidden_dim)
+        
+        # Encoder
+        self.query = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
+        self.key = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
+        self.value = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
+
+        self.attn = nn.MultiheadAttention(embed_dim=self.hidden_dim, num_heads=self.args.n_heads)
+        self.mask = None # last query에서는 필요가 없지만 수정을 고려하여서 넣어둠
+        self.ffn = Feed_Forward_block(self.hidden_dim)      
+
+        self.ln1 = nn.LayerNorm(self.hidden_dim)
+        self.ln2 = nn.LayerNorm(self.hidden_dim)
+
+        # LSTM
+        self.lstm = nn.LSTM(self.hidden_dim,
+                            self.hidden_dim,
+                            self.n_layers,
+                            batch_first=True,
+                            bidirectional=self.args.bidirectional)
+                            
+        
+        # Fully connected layer
+        self.fc = nn.Linear(self.hidden_dim * (2 if self.args.bidirectional else 1), 1)
+
+       
+        self.activation = nn.Sigmoid()
+
+    def get_pos(self, seq_len):
+        # use sine positional embeddinds
+        return torch.arange(seq_len).unsqueeze(0)
+ 
+    def init_hidden(self, batch_size):
+        h = torch.zeros(
+            self.args.n_layers,
+            batch_size,
+            self.args.hidden_dim)
+        h = h.to(self.device)
+
+        c = torch.zeros(
+            self.args.n_layers,
+            batch_size,
+            self.args.hidden_dim)
+        c = c.to(self.device)
+
+        return (h, c)
+
+
+    def forward(self, input):
+        mask, interaction, _ = input[-3], input[-2], input[-1]
+        cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
+        cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
+        batch_size = interaction.size(0)
+
+        # 범주형 Embedding
+        embed_interaction = self.embedding_interaction(interaction)
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
+
+        # 연속형 Embedding
+        cont_feats = [i.unsqueeze(2) for i in cont_feats]
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
+    
+        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+        embed = self.comb_proj(embed)
+
+        # Positional Embedding
+        #row = self.data[index]
+        # 각 data의 sequence length
+        #seq_len = len(row[0])
+        # last query에서는 positional embedding을 하지 않음
+        #position = self.get_pos(self.seq_len).to('cuda')
+        #embed_pos = self.embedding_position(position)
+        #embed = embed + embed_pos
+
+        ####################### ENCODER #####################
+
+        q = self.query(embed).permute(1, 0, 2)
+        
+        
+        q = self.query(embed)[:, -1:, :].permute(1, 0, 2)
+        
+        k = self.key(embed).permute(1, 0, 2)
+        v = self.value(embed).permute(1, 0, 2)
+
+        ## attention
+        # last query only
+        out, _ = self.attn(q, k, v)
+        
+        ## residual + layer norm
+        out = out.permute(1, 0, 2)
+        out = embed + out
+        out = self.ln1(out)
+
+        ## feed forward network
+        out = self.ffn(out)
+
+        ## residual + layer norm
+        out = embed + out
+        out = self.ln2(out)
+
+        ###################### LSTM #####################
+        hidden = self.init_hidden(batch_size)
+        out, hidden = self.lstm(out) #, hidden)
+
+        ###################### DNN #####################
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.args.bidirectional else 1))
+        out = self.fc(out)
+
+        preds = self.activation(out).view(batch_size, -1)
+
+        return preds
+
+
 
 def get_model(args, cate_embeddings): # junho
     """
@@ -389,6 +552,8 @@ def get_model(args, cate_embeddings): # junho
     elif args.model == 'lstmattn': model = LSTMATTN(args, cate_embeddings)
     elif args.model == 'bert': model = Bert(args, cate_embeddings)
     elif args.model == 'convbert': model= ConvBert(args, cate_embeddings) # chanhyeong
+    elif args.model == 'lastquery': model= LastQuery(args, cate_embeddings) # seoyoonbaek
+
     return model
 
 
