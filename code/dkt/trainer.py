@@ -173,6 +173,7 @@ class Trainer(object): # junho
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
@@ -196,8 +197,6 @@ class Trainer(object): # junho
             filt = len(sum(self.args.continuous_feats,[]))
             if i >= filt:
                 feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
-            else:
-                feats[i] = ((feats[i] + 1) * mask)
 
         # device memory로 이동
         for i in range(len(feats)):
@@ -210,7 +209,7 @@ class Trainer(object): # junho
         return feats + [mask, interaction, correct]
 
 
-    # loss계산하고 parameter update!
+    # loss 계산하고 parameter update!
     def __compute_loss(self, preds, targets):
         """
         Args :

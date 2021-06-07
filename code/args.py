@@ -17,14 +17,14 @@ def parse_args():
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
     
-    parser.add_argument('--max_seq_len', default=10, type=int, help='max sequence length')
+    parser.add_argument('--max_seq_len', default=20, type=int, help='max sequence length')
     parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
     parser.add_argument('--hidden_dim', default=300, type=int, help='hidden dimension size')
     parser.add_argument('--hd_divider', default=15, type=int, help='hidden dimension divider')
-    parser.add_argument('--n_layers', default=3, type=int, help='number of layers')
-    parser.add_argument('--n_heads', default=2, type=int, help='number of heads')
+    parser.add_argument('--n_layers', default=2, type=int, help='number of layers')
+    parser.add_argument('--n_heads', default=4, type=int, help='number of heads')
     parser.add_argument('--drop_out', default=0.2, type=float, help='drop out rate')
     parser.add_argument('--bidirectional', default=True, type=bool, help='bi or uni directional')
     
@@ -46,14 +46,14 @@ def parse_args():
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
-            default=[['duration'], ['difficulty'], ['win_tag_solved','win_testid_solved'], ['win_tag_avg','win_testid_avg'],\
-                    ['acc_tag_solved','acc_testid_solved'], ['acc_tag_avg','acc_testid_avg']],
-            help = 'duration, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
-                    win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg') # win == window, acc = accumulation
+            default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['tag_mean', 'tag_std'], ['testId_mean', 'testId_std']], 
+            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_std, assId_mean, assId_std, \
+                    tag_mean, tag_std, testId_mean, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
+                    win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+', 
             default=['testId', 'assessmentItemID', 'KnowledgeTag', 'character', 'week_number', 'mday', 'hour'],
-            help = 'testId, assessmentItemID, KnowledgeTag, character, difficulty, week_number, mday, hour')
+            help = 'testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
     parser.add_argument('--model', default='lstmattn', type=str, help='model type')
