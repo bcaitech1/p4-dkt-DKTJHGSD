@@ -33,11 +33,13 @@ def get_character(x):
     else :
         return 'I'
 
+
 def convert_time(s):
     timestamp = datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple()
     return timestamp
 
-def process_by_userid(x, grouped, args): # junho
+    
+def process_by_userid(x, grouped, args): # junho, seoyoon
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
     tmp = gp['Timestamp'].astype(str)
@@ -84,6 +86,18 @@ def process_by_userid(x, grouped, args): # junho
 
     return gp
 
+def generate_mean_std(df, df_all, x):
+    x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
+    x_std = df_all.groupby(x)['answerCode'].std().reset_index()
+
+    x_mean = {key:value for key, value in x_mean.values}
+    x_std = {key:value for key, value in x_std.values}
+
+    df_mean = df[x].apply(lambda x: x_mean[x])
+    df_std = df[x].apply(lambda x: x_std[x])
+
+    return df_mean, df_std
+
 def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
@@ -93,6 +107,16 @@ def use_all(dt, max_seq_len, slide):
     #     check = tuple([np.array(j) for j in tmp[:,i:i+max_seq_len]])
     #     new.append(check)
     return new
+
+def kfold_useall_data(train, val, args):
+    # 모든 데이터 사용
+    train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
+                val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+    return train, val
 
 class Preprocess:
     def __init__(self,args):
@@ -133,13 +157,10 @@ class Preprocess:
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train = True):
-        # 수치형은 거른당 
-        filt = ['userID','answerCode','Timestamp', 'time'] + sum(self.args.continuous_feats, [])
-        cate_cols = [i for i in list(df) if i not in filt]
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
             
-        for col in cate_cols:   
+        for col in self.args.categorical_feats:   
             le = LabelEncoder()
             if is_train:
                 #For UNKNOWN class
@@ -160,6 +181,7 @@ class Preprocess:
         #df['Timestamp'] = df['Timestamp'].apply(convert_time)
         
         return df
+    
 
     def __feature_engineering(self, df): # junho   
         # 유져별로 feature engineering
@@ -168,34 +190,41 @@ class Preprocess:
         final_df = parmap.map(partial(process_by_userid, grouped = grouped, args=self.args), 
                                       final_df, pm_pbar = True, pm_processes = multiprocessing.cpu_count())
         df = pd.concat(final_df)
-        # 문제 난이도 추가
-        # test = pd.read_csv(os.path.join(self.args.data_dir, self.args.test_file_name)) 
-        # test['difficulty'] = test['assessmentItemID'].apply(lambda x:x[1:4])
-        # diff_rate = test.loc[test.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        # diff_rate = diff_rate[['difficulty','answerCode']]
-        # diff_rate = {key:value for key, value in diff_rate.values}
 
+        # mean, std
+        df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
+        df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
+        df_test = df_test.loc[df.answerCode!=-1]
+        df_all = pd.concat([df_train, df_test])
+        
+        # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        if self.args.mode =='inference':
-            diff_rate = df.loc[df.answerCode!=-1].groupby('difficulty').mean().reset_index()
-        elif self.args.mode == 'train':
-            diff_rate = df.groupby('difficulty').mean().reset_index()
-        diff_rate = diff_rate[['difficulty','answerCode']]
-        diff_rate = {key:value for key, value in diff_rate.values}
+        df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
+        df['difficulty_mean'], df['difficulty_std'] = generate_mean_std(df, df_all, 'difficulty')
 
-        df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
-        df['difficulty'] = df['difficulty'].apply(lambda x: diff_rate[x])
+        # assessmentItemID mean, std
+        df['assId_mean'], df['assId_std'] = generate_mean_std(df, df_all, 'assessmentItemID')
+
+        # tag mean, std
+        df['tag_mean'], df['tag_std'] = generate_mean_std(df, df_all, 'KnowledgeTag')
+
+        # testId mean, std
+        df['testId_mean'], df['testId_std'] = generate_mean_std(df, df_all, 'testId')
 
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        # csv_file_path = os.path.join(self.args.data_dir, file_name) #
-        # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        # df = self.__feature_engineering(df)
-        # df = self.__preprocessing(df, is_train)
-        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', mode='w') # dataframe csv파일로 저장
+        csv_file_path = os.path.join(self.args.data_dir, file_name) # 
+        df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        df = self.__feature_engineering(df)
+        df = self.__preprocessing(df, is_train)
+        
+        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
 
-        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv') # 저장한 dataframe 불러오기 
+        ## merged train,test
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        ## train df
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)
