@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import random
 from collections import defaultdict
+import math
 
 import multiprocessing
 from functools import partial
@@ -151,7 +152,7 @@ class Preprocess:
             else:
                 label_path = os.path.join(self.args.asset_dir,col+'_classes.npy')
                 le.classes_ = np.load(label_path)
-                
+                print(col, type(df[col][0]))
                 df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'unknown')
 
             #모든 컬럼이 범주형이라고 가정
@@ -194,9 +195,16 @@ class Preprocess:
     def load_data_from_file(self, file_name, is_train=True):
         csv_file_path = os.path.join(self.args.data_dir, file_name) #
         df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        self.args.n_test = df['testId'].nunique()
+        self.args.n_questions = df['assessmentItemID'].nunique()
+        self.args.n_tag = df['KnowledgeTag'].nunique()
+        #df['KnowledgeTag'] = df['KnowledgeTag'].astype(str)
         df = self.__feature_engineering(df)
         df = self.__preprocessing(df, is_train)
-        
+
+        #self.args.n_test = df['testId'].nunique()
+        #self.args.n_questions = df['assessmentItemID'].nunique()
+        #self.args.n_tag = df['KnowledgeTag'].nunique()
         #df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', mode='w') # dataframe csv파일로 저장
         #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv') # 저장한 dataframe 불러오기 
 
@@ -208,6 +216,7 @@ class Preprocess:
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
         val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+        print(val)
         group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
 
         return group.values, cate_embeddings

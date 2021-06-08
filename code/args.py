@@ -21,10 +21,10 @@ def parse_args():
     parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
-    parser.add_argument('--hidden_dim', default=400, type=int, help='hidden dimension size')
-    parser.add_argument('--hd_divider', default=10, type=int, help='hidden dimension divider')
-    parser.add_argument('--n_layers', default=3, type=int, help='number of layers')
-    parser.add_argument('--n_heads', default=4, type=int, help='number of heads')
+    parser.add_argument('--hidden_dim', default=64, type=int, help='hidden dimension size')
+    parser.add_argument('--hd_divider', default=3, type=int, help='hidden dimension divider')
+    parser.add_argument('--n_layers', default=2, type=int, help='number of layers')
+    parser.add_argument('--n_heads', default=2, type=int, help='number of heads')
     parser.add_argument('--drop_out', default=0.2, type=float, help='drop out rate')
     parser.add_argument('--bidirectional', default=True, type=bool, help='bi or uni directional')
     
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
     parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
-    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--weight_decay',default=1e-3,type=float,help='weight decay') #changhyeong
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
     #parser.add_argument('--patience', default=5, type=int, help='for early stopping')
