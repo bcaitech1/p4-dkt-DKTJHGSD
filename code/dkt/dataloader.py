@@ -33,28 +33,31 @@ def get_character(x):
     else :
         return 'I'
 
-
-def convert_time(s):
-    timestamp = datetime.strptime(s, '%Y-%m-%d %H:%M:%S').timetuple()
-    return timestamp
-
-    
 def process_by_userid(x, grouped, args): # junho, seoyoon
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID','Timestamp'] ,ascending=True)
-    tmp = gp['Timestamp'].astype(str)
-    gp['Timestamp'] = tmp.apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
-    gp['time'] = gp['Timestamp'].shift(-1, fill_value=datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
-    gp['time'] = gp['time'] - gp['Timestamp']
-    gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
+
+    if args.mode == 'pretrain':
+        # Riiid 데이터에서 int 형태의 timestamp 사용
+        gp['Timestamp'] = gp['Timestamp'].astype('int64')
+        gp['time'] = gp['Timestamp'].shift(-1, fill_value=0)
+        gp['time'] = gp['time'] - gp['Timestamp']
+
+    else:
+        tmp = gp['Timestamp'].astype(str)
+        gp['Timestamp'] = tmp.apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+        gp['time'] = gp['Timestamp'].shift(-1, fill_value=datetime.strptime('1970-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
+        gp['time'] = gp['time'] - gp['Timestamp']
+        gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
+
+        timetuple = tmp.apply(convert_time)
+        gp['week_number'] = gp['Timestamp'].apply(lambda x: x.isocalendar()[1])  # 해당 년도의 몇번째 주인지
+        gp['mday'] = timetuple.apply(lambda x: x.tm_wday)  # 요일
+        gp['hour'] = timetuple.apply(lambda x: x.tm_hour)  # 시간
+
     gp['duration'] = gp['time'].apply(lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4*60) & (gp['time'] >= 0)].mean())
     gp['character'] = gp['time'].apply(get_character)
 
-    timetuple = tmp.apply(convert_time)
-    gp['week_number'] = gp['Timestamp'].apply(lambda x:x.isocalendar()[1]) # 해당 년도의 몇번째 주인지
-    gp['mday'] = timetuple.apply(lambda x:x.tm_wday) # 요일
-    gp['hour'] = timetuple.apply(lambda x:x.tm_hour) # 시간
-    
     # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
     record = defaultdict(list)
     c_record = defaultdict(int)
@@ -171,15 +174,13 @@ class Preprocess:
                 label_path = os.path.join(self.args.asset_dir,col+'_classes.npy')
                 le.classes_ = np.load(label_path)
                 
-                df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'unknown')
+                df[col] = df[col].apply(lambda x: str(x) if str(x) in le.classes_ else 'unknown')
 
             #모든 컬럼이 범주형이라고 가정
             df[col]= df[col].astype(str)
             test = le.transform(df[col])
             df[col] = test
             
-        #df['Timestamp'] = df['Timestamp'].apply(convert_time)
-        
         return df
     
 
@@ -192,10 +193,14 @@ class Preprocess:
         df = pd.concat(final_df)
 
         # mean, std
-        df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
-        df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
-        df_test = df_test.loc[df.answerCode!=-1]
-        df_all = pd.concat([df_train, df_test])
+        if self.args.merge_train_test and self.args.mode != 'pretrain':
+           df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv'))
+           df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv'))
+           df_test = df_test.loc[df.answerCode!=-1]
+           df_all = pd.concat([df_train, df_test])
+
+        else:
+            df_all = df
         
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
@@ -214,17 +219,33 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        csv_file_path = os.path.join(self.args.data_dir, file_name) # 
-        df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        df = self.__feature_engineering(df)
-        df = self.__preprocessing(df, is_train)
-        
-        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
 
-        ## merged train,test
-        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
-        ## train df
-        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        if self.args.mode == 'pretrain':
+            self.args.data_dir = '/opt/ml/input'
+            file_name = 'riiid_ver2_sec1.csv'
+
+        if self.args.reprocess_data:
+            csv_file_path = os.path.join(self.args.data_dir, file_name) #
+            df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+            df = self.__feature_engineering(df)
+            df = self.__preprocessing(df, is_train)
+
+            if self.args.mode == 'pretrain':
+                df = df.fillna({'duration': df['duration'].mean(), 'assId_std': 0, 'testId_std': 0})
+                df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df_riiid.csv', mode='w') # dataframe csv파일로 저장
+            else:
+                df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
+
+        else:
+            if self.args.mode == 'pretrain':
+                df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df_riiid.csv')
+            else:
+                if self.args.merge_train_test:
+                    ## merged train,test
+                    df = pd.read_csv('/opt/ml/code/output/merged_df.csv') # 저장한 dataframe 불러오기
+                else:
+                    ## train df
+                    df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)
@@ -269,6 +290,7 @@ class DKTDataset(torch.utils.data.Dataset):
 
         # mask도 columns 목록에 포함시킴
         feat_cols.append(mask)
+
 
         # np.array -> torch.tensor 형변환
         for i, col in enumerate(feat_cols):

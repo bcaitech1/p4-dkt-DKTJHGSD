@@ -19,7 +19,7 @@ def main(args):
     name = '(' + args.model + ')' + ' ' + get_timestamp()
     preprocess = Preprocess(args)
 
-    if args.mode == 'train': #junho
+    if args.mode == 'train' or args.mode == 'pretrain': #junho
         wandb.login()
         preprocess.load_train_data(args.file_name)
         train_data, cate_embeddings = preprocess.get_train_data()
@@ -43,7 +43,7 @@ def main(args):
                 wandb.init(project='dkt', config=vars(args), name = name)
             run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings)
         
-        shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 
+        # shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제
 
     elif args.mode =='inference': # junho
         preprocess.load_test_data(args.test_file_name)
