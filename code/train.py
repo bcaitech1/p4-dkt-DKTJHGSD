@@ -25,12 +25,17 @@ def main(args):
         train_data, cate_embeddings = preprocess.get_train_data()
         if args.kfold:
             wandb.init(project='dkt', config=vars(args), name = name)
-            kf, cnt = KFold(n_splits=args.kfold), 1
+            kf, cnt, accu_auc, best_fold, best_auc = KFold(n_splits=args.kfold), 1, 0, 0, 0
             for train_idx, val_idx in kf.split(train_data):
                 train, valid = train_data[train_idx], train_data[val_idx]
                 train, valid = kfold_useall_data(train, valid, args)
-                run(args, train_data = train, valid_data = valid, cate_embeddings = cate_embeddings, fold = cnt)
-                cnt += 1
+                auc = run(args, train_data = train, valid_data = valid, cate_embeddings = cate_embeddings, fold = cnt)
+                accu_auc += auc
+                if auc > best_auc:
+                    best_auc, best_fold = auc, cnt
+                cnt += 1 
+            print(f'Average AUC : {round(accu_auc/args.kfold,2)}')
+            print(f'Best_fold / AUC : {best_fold} / {best_auc}')
         else:
             train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)  
             if args.sweep : #chanhyeong

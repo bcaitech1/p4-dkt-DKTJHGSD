@@ -53,34 +53,34 @@ def process_by_userid(x, grouped, args): # junho
     gp['mday'] = timetuple.apply(lambda x:x.tm_wday) # 요일
     gp['hour'] = timetuple.apply(lambda x:x.tm_hour) # 시간
     
-    # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
-    record = defaultdict(list)
-    c_record = defaultdict(int)
-    gp['acc_tag_solved'], gp['acc_testid_solved'], gp['acc_tag_avg'], gp['acc_testid_avg']  = 0, 0, 0, 0
-    gp['win_tag_solved'], gp['win_testid_solved'], gp['win_tag_avg'], gp['win_testid_avg']  = 0, 0, 0, 0
-    filt = []
-    for i in range(len(gp)):
-        for type_ in ['acc','win']:
-            for col in ['KnowledgeTag','testId']:
-                record[type_+col+'avg'].append(float(round((c_record[type_+str(gp[col].iloc[i])+'cor']/c_record[type_+str(gp[col].iloc[i])])*100, 2)) if c_record[type_+str(gp[col].iloc[i])] != 0 else 0)
-                record[type_+col+'solved'].append(c_record[type_+str(gp[col].iloc[i])])
-                c_record[type_+str(gp[col].iloc[i])] += 1
-                if gp['answerCode'].iloc[i] == 1:
-                    c_record[type_+str(gp[col].iloc[i])+'cor'] += 1
-            if type_ == 'win':
-                filt.append([gp['KnowledgeTag'].iloc[i], gp['testId'].iloc[i], gp['answerCode'].iloc[i]])
-                if i >= args.max_seq_len:
-                    tmp_know, tmp_testid, res = filt.pop(0)
-                    c_record[type_+str(tmp_know)] -= 1
-                    c_record[type_+str(tmp_testid)] -= 1
-                    if res == 1:
-                        c_record[type_+str(tmp_know)+'cor'] -= 1
-                        c_record[type_+str(tmp_testid)+'cor'] -= 1
+    # # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
+    # record = defaultdict(list)
+    # c_record = defaultdict(int)
+    # gp['acc_tag_solved'], gp['acc_testid_solved'], gp['acc_tag_avg'], gp['acc_testid_avg']  = 0, 0, 0, 0
+    # gp['win_tag_solved'], gp['win_testid_solved'], gp['win_tag_avg'], gp['win_testid_avg']  = 0, 0, 0, 0
+    # filt = []
+    # for i in range(len(gp)):
+    #     for type_ in ['acc','win']:
+    #         for col in ['KnowledgeTag','testId']:
+    #             record[type_+col+'avg'].append(float(round((c_record[type_+str(gp[col].iloc[i])+'cor']/c_record[type_+str(gp[col].iloc[i])])*100, 2)) if c_record[type_+str(gp[col].iloc[i])] != 0 else 0)
+    #             record[type_+col+'solved'].append(c_record[type_+str(gp[col].iloc[i])])
+    #             c_record[type_+str(gp[col].iloc[i])] += 1
+    #             if gp['answerCode'].iloc[i] == 1:
+    #                 c_record[type_+str(gp[col].iloc[i])+'cor'] += 1
+    #         if type_ == 'win':
+    #             filt.append([gp['KnowledgeTag'].iloc[i], gp['testId'].iloc[i], gp['answerCode'].iloc[i]])
+    #             if i >= args.max_seq_len:
+    #                 tmp_know, tmp_testid, res = filt.pop(0)
+    #                 c_record[type_+str(tmp_know)] -= 1
+    #                 c_record[type_+str(tmp_testid)] -= 1
+    #                 if res == 1:
+    #                     c_record[type_+str(tmp_know)+'cor'] -= 1
+    #                     c_record[type_+str(tmp_testid)+'cor'] -= 1
                         
-    gp['acc_tag_solved'], gp['acc_testid_solved']  = record['accKnowledgeTagsolved'], record['acctestIdsolved']
-    gp['acc_tag_avg'], gp['acc_testid_avg'] = record['accKnowledgeTagavg'], record['acctestIdavg']
-    gp['win_tag_solved'], gp['win_testid_solved'] = record['winKnowledgeTagsolved'], record['wintestIdsolved']
-    gp['win_tag_avg'], gp['win_testid_avg'] =record['winKnowledgeTagavg'], record['wintestIdavg']
+    # gp['acc_tag_solved'], gp['acc_testid_solved']  = record['accKnowledgeTagsolved'], record['acctestIdsolved']
+    # gp['acc_tag_avg'], gp['acc_testid_avg'] = record['accKnowledgeTagavg'], record['acctestIdavg']
+    # gp['win_tag_solved'], gp['win_testid_solved'] = record['winKnowledgeTagsolved'], record['wintestIdsolved']
+    # gp['win_tag_avg'], gp['win_testid_avg'] =record['winKnowledgeTagavg'], record['wintestIdavg']
 
     return gp
 
@@ -96,13 +96,35 @@ def use_all(dt, max_seq_len, slide):
 
 def kfold_useall_data(train, val, args):
     # 모든 데이터 사용
-    train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
-                train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    if args.by_window_or_by_testid == 'by_testid':
+        data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args), 
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= 20), 
-                val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args), 
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    elif args.by_window_or_by_testid == 'by_window':
+        data_1 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window), 
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-    return train, val
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window), 
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    else:
+        data_1_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args), 
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_2_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args), 
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_1_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window), 
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_2_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window), 
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_1 = data_1_1 + data_1_2
+        data_2 = data_2_1 + data_2_2
+
+    return data_1, data_2
 
 def generate_mean_std(df, df_all, x):
     x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
@@ -115,6 +137,61 @@ def generate_mean_std(df, df_all, x):
     df_std = df[x].apply(lambda x: x_std[x])
 
     return df_mean, df_std
+
+def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
+    seq_len = len(dt[0])
+    tmp = np.stack(dt)
+    span = tmp[-1, :].astype(int)
+    s = 0
+    spans = []
+    new = []
+    if is_train:
+        while s < seq_len:
+            e = span[s]
+            docs = []
+
+            while e - s <= max_seq_len:
+                docs.append((s, e))
+                if e < seq_len:
+                    e = span[e]
+                else:
+                    break
+
+            for doc in docs[test_cnt - 1:]:
+                spans.append(doc)
+            s = span[s]
+
+        for s, e in spans:
+            if args.by_window_or_by_testid == 'both' and e - s == max_seq_len:
+                continue
+            new.append(tuple(np.array(j) for j in tmp[:-1, s:e]))
+    else:
+        if len(span) > max_seq_len:
+            new.append(tuple(np.array(j) for j in tmp[:-1, span[-max_seq_len - 1]:]))
+        else:
+            new.append(tuple(np.array(j) for j in tmp[:-1, :]))
+    return new
+
+
+def make_max_min_idx(x, group):
+    df = group.get_group(x).reset_index(drop=True)
+
+    testid = df.loc[0, 'testId']
+    index = []
+
+    for idx in range(len(df)):
+        if testid != df.loc[idx, 'testId']:
+            df.loc[index, 'max_index'] = index[-1] + 1
+            df.loc[index, 'min_index'] = index[0]
+            index = [idx]
+            testid = df.loc[idx, 'testId']
+        else:
+            index.append(idx)
+
+    df.loc[index, 'max_index'] = index[-1] + 1
+    df.loc[index, 'min_index'] = index[0]
+    
+    return df
 
 class Preprocess:
     def __init__(self,args):
@@ -142,11 +219,33 @@ class Preprocess:
         data_2 = data[size:]
 
         # 모든 데이터 사용
-        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
-                    data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        if self.args.by_window_or_by_testid == 'by_testid':
+            data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args), 
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=20), 
-                    data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+            data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args), 
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        elif self.args.by_window_or_by_testid == 'by_window':
+            data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        else:
+            data_1_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args), 
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args), 
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_1_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_1 = data_1_1 + data_1_2
+            data_2 = data_2_1 + data_2_2
 
         return data_1, data_2
 
@@ -157,7 +256,12 @@ class Preprocess:
     def __preprocessing(self, df, is_train = True):
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
-            
+        
+        df['max_index'] = 0
+        df['min_index'] = 0
+        df = parmap.map(partial(make_max_min_idx, group = df.groupby('userID')), df['userID'].unique(), pm_pbar=True, pm_processes = multiprocessing.cpu_count())
+        df = pd.concat(df)
+
         for col in self.args.categorical_feats:   
             le = LabelEncoder()
             if is_train:
@@ -168,8 +272,7 @@ class Preprocess:
             else:
                 label_path = os.path.join(self.args.asset_dir,col+'_classes.npy')
                 le.classes_ = np.load(label_path)
-                
-                df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'unknown')
+                df[col] = df[col].apply(lambda x: str(x) if str(x) in le.classes_ else 'unknown')
 
             #모든 컬럼이 범주형이라고 가정
             df[col]= df[col].astype(str)
@@ -209,16 +312,16 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        # csv_file_path = os.path.join(self.args.data_dir, file_name) # 
-        # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        # df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) #, nrows=100000)
-        # df = self.__feature_engineering(df)
-        # df = self.__preprocessing(df, is_train)
+        #csv_file_path = os.path.join(self.args.data_dir, file_name) # 
+        #df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) #, nrows=100000)
+        df = self.__feature_engineering(df)
+        df = self.__preprocessing(df, is_train)
         
         # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
 
         ## merged train,test
-        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
         ## train df
         #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
@@ -229,7 +332,11 @@ class Preprocess:
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
-        val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+        if self.args.by_window_or_by_testid == 'by_testid':
+            val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode'] + ['max_index']
+        else:
+            val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+
         group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
 
         return group.values, cate_embeddings
@@ -239,6 +346,10 @@ class Preprocess:
 
     def load_test_data(self, file_name):
         self.test_data, self.cate_embeddings = self.load_data_from_file(file_name, is_train= False)
+        if self.args.by_window_or_by_testid == 'by_testid':
+            self.test_data = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, is_train=False, args=self.args), 
+                            self.test_data, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+            
 
 
 class DKTDataset(torch.utils.data.Dataset):
