@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument('--slide_window', default=3, type=int) # junho
     parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method or both')
     parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length')
-    parser.add_argument('--Tfixup', default=True, type=bool, help='Utilize Tfixup')
+    parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
