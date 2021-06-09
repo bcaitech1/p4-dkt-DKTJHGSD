@@ -61,12 +61,13 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
                 early_stopping_counter += 1
                 if early_stopping_counter >= args.patience:
                     print(f'EarlyStopping counter: {early_stopping_counter} out of {args.patience}')
-                    break
+                    return best_auc
 
             # scheduler
             if args.scheduler == 'plateau':
                 scheduler.step(best_auc)
         print('='*50 + f' Training finished, best model found in epoch : {best_epoch} ' + '='*50)
+        return best_auc
     
     elif args.mode == 'inference':
         print("Start Inference")

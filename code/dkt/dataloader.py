@@ -89,18 +89,6 @@ def process_by_userid(x, grouped, args): # junho, seoyoon
 
     return gp
 
-def generate_mean_std(df, df_all, x):
-    x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
-    x_std = df_all.groupby(x)['answerCode'].std().reset_index()
-
-    x_mean = {key:value for key, value in x_mean.values}
-    x_std = {key:value for key, value in x_std.values}
-
-    df_mean = df[x].apply(lambda x: x_mean[x])
-    df_std = df[x].apply(lambda x: x_std[x])
-
-    return df_mean, df_std
-
 def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
@@ -113,13 +101,102 @@ def use_all(dt, max_seq_len, slide):
 
 def kfold_useall_data(train, val, args):
     # 모든 데이터 사용
-    train = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
-                train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    if args.by_window_or_by_testid == 'by_testid':
+        data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-    val = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide= args.slide_window), 
-                val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    elif args.by_window_or_by_testid == 'by_window':
+        data_1 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window),
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-    return train, val
+        data_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window),
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+    else:
+        data_1_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_2_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_1_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window),
+                    train, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_2_2 = sum(parmap.map(partial(use_all, max_seq_len = args.max_seq_len, slide=args.slide_window),
+                    val, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+        data_1 = data_1_1 + data_1_2
+        data_2 = data_2_1 + data_2_2
+
+    return data_1, data_2
+
+def generate_mean_std(df, df_all, x):
+    x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
+    x_std = df_all.groupby(x)['answerCode'].std().reset_index()
+
+    x_mean = {key:value for key, value in x_mean.values}
+    x_std = {key:value for key, value in x_std.values}
+
+    df_mean = df[x].apply(lambda x: x_mean[x])
+    df_std = df[x].apply(lambda x: x_std[x])
+
+    return df_mean, df_std
+
+def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
+    seq_len = len(dt[0])
+    tmp = np.stack(dt)
+    span = tmp[-1, :].astype(int)
+    s = 0
+    spans = []
+    new = []
+    if is_train:
+        while s < seq_len:
+            e = span[s]
+            docs = []
+
+            while e - s <= max_seq_len:
+                docs.append((s, e))
+                if e < seq_len:
+                    e = span[e]
+                else:
+                    break
+
+            for doc in docs[test_cnt - 1:]:
+                spans.append(doc)
+            s = span[s]
+
+        for s, e in spans:
+            if args.by_window_or_by_testid == 'both' and e - s == max_seq_len:
+                continue
+            new.append(tuple(np.array(j) for j in tmp[:-1, s:e]))
+    else:
+        if len(span) > max_seq_len:
+            new.append(tuple(np.array(j) for j in tmp[:-1, span[-max_seq_len - 1]:]))
+        else:
+            new.append(tuple(np.array(j) for j in tmp[:-1, :]))
+    return new
+
+
+def make_max_min_idx(x, group):
+    df = group.get_group(x).reset_index(drop=True)
+
+    testid = df.loc[0, 'testId']
+    index = []
+
+    for idx in range(len(df)):
+        if testid != df.loc[idx, 'testId']:
+            df.loc[index, 'max_index'] = index[-1] + 1
+            df.loc[index, 'min_index'] = index[0]
+            index = [idx]
+            testid = df.loc[idx, 'testId']
+        else:
+            index.append(idx)
+
+    df.loc[index, 'max_index'] = index[-1] + 1
+    df.loc[index, 'min_index'] = index[0]
+
+    return df
 
 class Preprocess:
     def __init__(self,args):
@@ -147,11 +224,33 @@ class Preprocess:
         data_2 = data[size:]
 
         # 모든 데이터 사용
-        data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
-                    data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        if self.args.by_window_or_by_testid == 'by_testid':
+            data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args),
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
 
-        data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window), 
-                    data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+            data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args),
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        elif self.args.by_window_or_by_testid == 'by_window':
+            data_1 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window),
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window),
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+        else:
+            data_1_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args),
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2_1 = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, args=self.args),
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_1_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window),
+                        data_1, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_2_2 = sum(parmap.map(partial(use_all, max_seq_len = self.args.max_seq_len, slide=self.args.slide_window),
+                        data_2, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
+            data_1 = data_1_1 + data_1_2
+            data_2 = data_2_1 + data_2_2
 
         return data_1, data_2
 
@@ -162,7 +261,12 @@ class Preprocess:
     def __preprocessing(self, df, is_train = True):
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
-            
+
+        df['max_index'] = 0
+        df['min_index'] = 0
+        df = parmap.map(partial(make_max_min_idx, group = df.groupby('userID')), df['userID'].unique(), pm_pbar=True, pm_processes = multiprocessing.cpu_count())
+        df = pd.concat(df)
+
         for col in self.args.categorical_feats:   
             le = LabelEncoder()
             if is_train:
@@ -173,16 +277,15 @@ class Preprocess:
             else:
                 label_path = os.path.join(self.args.asset_dir,col+'_classes.npy')
                 le.classes_ = np.load(label_path)
-                
                 df[col] = df[col].apply(lambda x: str(x) if str(x) in le.classes_ else 'unknown')
 
             #모든 컬럼이 범주형이라고 가정
             df[col]= df[col].astype(str)
             test = le.transform(df[col])
             df[col] = test
-            
+
         return df
-    
+
 
     def __feature_engineering(self, df): # junho   
         # 유져별로 feature engineering
@@ -201,7 +304,7 @@ class Preprocess:
 
         else:
             df_all = df
-        
+
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
         df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
@@ -254,7 +357,11 @@ class Preprocess:
 
         df = df.sort_values(by=['userID','Timestamp'], axis=0)
         columns = [i for i in list(df) if i !='Timestamp']
-        val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+        if self.args.by_window_or_by_testid == 'by_testid':
+            val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode'] + ['max_index']
+        else:
+            val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
+
         group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
 
         return group.values, cate_embeddings
@@ -264,6 +371,10 @@ class Preprocess:
 
     def load_test_data(self, file_name):
         self.test_data, self.cate_embeddings = self.load_data_from_file(file_name, is_train= False)
+        if self.args.by_window_or_by_testid == 'by_testid':
+            self.test_data = sum(parmap.map(partial(use_by_testid, max_seq_len = self.args.max_seq_len, test_cnt=self.args.testid_cnt, is_train=False, args=self.args),
+                            self.test_data, pm_pbar = True, pm_processes = multiprocessing.cpu_count()), [])
+
 
 
 class DKTDataset(torch.utils.data.Dataset):
