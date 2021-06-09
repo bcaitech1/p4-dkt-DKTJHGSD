@@ -281,9 +281,9 @@ class Preprocess:
 
     def __preprocessing(self, df, is_train=True):
         if self.args.mode == 'pretrain':
-            self.args.asset_dir = 'pretrain_' + self.args.asset_dir
+            self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
-            self.args.asset_dir = 'test_' + self.args.asset_dir
+            self.args.asset_dir = 'test_asset/'
 
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
@@ -382,9 +382,9 @@ class Preprocess:
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)
         if self.args.mode == 'pretrain':
-            self.args.asset_dir = 'pretrain_' + self.args.asset_dir
+            self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
-            self.args.asset_dir = 'test_' + self.args.asset_dir
+            self.args.asset_dir = 'test_asset/'
 
         for cate_name in self.args.categorical_feats:
             cate_embeddings[cate_name] = len(np.load(os.path.join(self.args.asset_dir, cate_name + '_classes.npy')))
