@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
 import os
+import re
 
 try:
     from transformers.modeling_bert import BertConfig, BertEncoder, BertModel    
@@ -117,7 +118,7 @@ class LSTMATTN(nn.Module):
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -146,6 +147,55 @@ class LSTMATTN(nn.Module):
         self.fc = nn.Linear(self.hidden_dim *(2 if self.bidirectional else 1), 1)
 
         self.activation = nn.Sigmoid()
+
+        # T-Fixup
+        if self.args.Tfixup:
+
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+            elif re.match(r'.*ln.*|.*bn.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+
+            # TODO: 모델 내부의 module 이름이 달라지면 직접 수정해서
+            #       module이 scaling 될 수 있도록 변경해주자
+            # print(name)
+
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
 
     def init_hidden(self, batch_size):
         h = torch.zeros(
@@ -384,7 +434,6 @@ class ConvBert(nn.Module): # chanhyeong
 
 
 # seoyoon
-
 class Feed_Forward_block(nn.Module):
     """
     out =  Relu( M_out*w1 + b1) *w2 + b2
@@ -420,10 +469,10 @@ class LastQuery(nn.Module):
 
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -444,8 +493,9 @@ class LastQuery(nn.Module):
         self.mask = None # last query에서는 필요가 없지만 수정을 고려하여서 넣어둠
         self.ffn = Feed_Forward_block(self.hidden_dim)      
 
-        self.ln1 = nn.LayerNorm(self.hidden_dim)
-        self.ln2 = nn.LayerNorm(self.hidden_dim)
+        if self.args.layer_norm:
+            self.ln1 = nn.LayerNorm(self.hidden_dim)
+            self.ln2 = nn.LayerNorm(self.hidden_dim)
 
         # LSTM
         self.lstm = nn.LSTM(self.hidden_dim,
@@ -460,6 +510,67 @@ class LastQuery(nn.Module):
 
        
         self.activation = nn.Sigmoid()
+
+        if self.args.Tfixup:
+
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+                print('name2 : ', name)
+            elif re.match(r'.*ln.*|.*bn.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+
+            # TODO: 모델 내부의 module 이름이 달라지면 직접 수정해서
+            #       module이 scaling 될 수 있도록 변경해주자
+            print(name)
+
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
+
+    def mask_2d_to_3d(self, mask, batch_size, seq_len):
+        # padding 부분에 1을 주기 위해 0과 1을 뒤집는다
+        mask = torch.ones_like(mask) - mask
+        
+        mask = mask.repeat(1, seq_len)
+        mask = mask.view(batch_size, -1, seq_len)
+        mask = mask.repeat(1, self.args.n_heads, 1)
+        mask = mask.view(batch_size*self.args.n_heads, -1, seq_len)
+
+        return mask.masked_fill(mask==1, float('-inf'))
 
     def get_pos(self, seq_len):
         # use sine positional embeddinds
@@ -524,14 +635,18 @@ class LastQuery(nn.Module):
         ## residual + layer norm
         out = out.permute(1, 0, 2)
         out = embed + out
-        out = self.ln1(out)
+
+        if self.args.layer_norm:
+            out = self.ln1(out)
 
         ## feed forward network
         out = self.ffn(out)
 
         ## residual + layer norm
         out = embed + out
-        out = self.ln2(out)
+        
+        if self.args.layer_norm:
+            out = self.ln2(out)
 
         ###################### LSTM #####################
         hidden = self.init_hidden(batch_size)
@@ -544,6 +659,8 @@ class LastQuery(nn.Module):
         preds = self.activation(out).view(batch_size, -1)
 
         return preds
+
+
 
 
 def get_model(args, cate_embeddings): # junho

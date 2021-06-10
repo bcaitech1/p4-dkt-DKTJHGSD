@@ -41,7 +41,11 @@ def parse_args():
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
-    parser.add_argument('--slide_window', default=5, type=int) # junho
+    parser.add_argument('--slide_window', default=1, type=int) # junho
+    parser.add_argument('--by_window_or_by_testid', default='by_window', type=str, help='choose split data method or both')
+    parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
+    parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
 
 
     # feature
