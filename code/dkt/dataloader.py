@@ -150,6 +150,7 @@ def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     span = tmp[-1, :].astype(int)
+    
     s = 0
     spans = []
     new = []
