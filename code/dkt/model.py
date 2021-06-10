@@ -106,7 +106,7 @@ class LSTMATTN(nn.Module):
         self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
-        #self.each_cont_idx = [[0, self.num_each_cont[0]]]
+        self.each_cont_idx = [[0, self.num_each_cont[0]]]
         self.each_cont_idx = []
 
         for i in range(1, len(self.num_each_cont)):

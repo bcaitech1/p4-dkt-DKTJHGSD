@@ -7,10 +7,10 @@ def parse_args():
     parser.add_argument('--seed', default=42, type=int, help='seed')
     # parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
 
-    parser.add_argument('--data_dir', default='/opt/ml/input/', type=str, help='data directory')
+    parser.add_argument('--data_dir', default='/opt/ml/input/data/train_dataset', type=str, help='data directory')
     parser.add_argument('--asset_dir', default='asset/', type=str, help='data directory')
 
-    parser.add_argument('--file_name', default='riiid_ver2_sec1.csv', type=str, help='train file name')
+    parser.add_argument('--file_name', default='train_data.csv', type=str, help='train file name')
     parser.add_argument('--model_dir', default='models/', type=str, help='model directory')
 
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
@@ -56,24 +56,24 @@ def parse_args():
                              win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+',
-                        default=['testId', 'assessmentItemID', 'character'],
-                        # , 'KnowledgeTag', 'week_number', 'mday', 'hour'],
+                        default=['testId', 'assessmentItemID', 'character',
+                        'KnowledgeTag', 'week_number', 'mday', 'hour'],
                         help='testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='lstmattn', type=str, help='model type')
+    parser.add_argument('--model', default='lastquery', type=str, help='model type')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
                         help='scheduler type')  # [plateau, steplr, cosine, linear]
-    parser.add_argument('--mode', default='pretrain', type=str, help='pretrain, train or inference')  # junho, sooyoun
+    parser.add_argument('--mode', default='inference', type=str, help='pretrain, train or inference')  # junho, sooyoun
     parser.add_argument('--use_pretrained_model', default=False, type=bool,
                         help='if True, use pretrained model when training a model')  # sooyoun
-    parser.add_argument('--merge_train_test', default=False, type=bool,
+    parser.add_argument('--merge_train_test', default=True, type=bool,
                         help='if True, merge train dataset and test dataset for training')  # sooyoun
     parser.add_argument('--reprocess_data', default=False, type=bool,
                         help='if True, reprocess data using feature engineering and preprocessing')  # sooyoun
     parser.add_argument('--sweep', default=False, type=bool, help='if True, sweep mode')  # chanhyeong
-    parser.add_argument('--save_name', default="pretrain", type=str, help='save name')  # chanhyeong
+    parser.add_argument('--save_name', default="no_finetuned", type=str, help='save name')  # chanhyeong
     args = parser.parse_args()
 
     return args

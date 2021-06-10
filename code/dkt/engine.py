@@ -21,7 +21,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
         model = get_model(args, cate_embeddings)
 
         if args.use_pretrained_model:
-            model_path = os.path.join(args.model_dir, args.save_name)
+            model_path = os.path.join(args.model_dir, 'pretrain.pt')
             model.load_state_dict(torch.load(model_path), strict=False)  # 이어서 학습
         optimizer = get_optimizer(model, args)
         scheduler = call_scheduler(optimizer, args)

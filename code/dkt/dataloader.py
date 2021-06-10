@@ -288,15 +288,15 @@ class Preprocess:
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
 
-        # df['max_index'] = 0
-        # df['min_index'] = 0
-        # df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
-        #                 pm_processes=multiprocessing.cpu_count())
-        # df = pd.concat(df)
+        df['max_index'] = 0
+        df['min_index'] = 0
+        df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
+                        pm_processes=multiprocessing.cpu_count())
+        df = pd.concat(df)
 
         for col in self.args.categorical_feats:
             le = LabelEncoder()
-            if is_train:
+            if self.args.reprocess_data:
                 # For UNKNOWN class
                 a = df[col].unique().tolist() + ['unknown']
                 le.fit(a)
