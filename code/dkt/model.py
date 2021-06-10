@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
 import os
+import re
 
 try:
     from transformers.modeling_bert import BertConfig, BertEncoder, BertModel    
@@ -91,6 +92,8 @@ class LSTM(nn.Module):
 
         return preds
 
+        
+
 
 class LSTMATTN(nn.Module):
     def __init__(self, args, cate_embeddings):
@@ -105,8 +108,7 @@ class LSTMATTN(nn.Module):
         self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
-        #self.each_cont_idx = [[0, self.num_each_cont[0]]]
-        self.each_cont_idx = []
+        self.each_cont_idx = [[0, self.num_each_cont[0]]]
 
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
@@ -116,7 +118,7 @@ class LSTMATTN(nn.Module):
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -145,6 +147,55 @@ class LSTMATTN(nn.Module):
         self.fc = nn.Linear(self.hidden_dim *(2 if self.bidirectional else 1), 1)
 
         self.activation = nn.Sigmoid()
+
+        # T-Fixup
+        if self.args.Tfixup:
+
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+            elif re.match(r'.*ln.*|.*bn.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+
+            # TODO: 모델 내부의 module 이름이 달라지면 직접 수정해서
+            #       module이 scaling 될 수 있도록 변경해주자
+            # print(name)
+
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
 
     def init_hidden(self, batch_size):
         h = torch.zeros(
@@ -381,160 +432,8 @@ class ConvBert(nn.Module): # chanhyeong
 
         return preds
 
-# seoyoon
-class LastQuery(nn.Module):  
-    def __init__(self, args, cate_embeddings):
-        super(LastQuery, self).__init__()
-        self.args = args
-        self.hidden_dim = self.args.hidden_dim
-        self.n_layers = self.args.n_layers
-        self.n_heads = self.args.n_heads
-        self.drop_out = self.args.drop_out
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.bidirectional = args.bidirectional
-        self.hd_div = args.hd_divider
-        self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
-        self.num_each_cont = [len(i) for i in self.args.continuous_feats]
-        self.each_cont_idx = [[0, self.num_each_cont[0]]]
-
-        
-        # Embedding 
-        # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
-        for i in range(1, len(self.num_each_cont)):
-            self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
-
-        # # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
-
-        # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
-                                            nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
-
-
-        # # embedding combination projection
-        self.comb_proj = nn.Linear((self.hidden_dim//self.hd_div)*self.num_feats, self.hidden_dim)
-
-
-        # 기존 keetar님 솔루션에서는 Positional Embedding은 사용되지 않습니다
-        # 하지만 사용 여부는 자유롭게 결정해주세요 :)
-        #self.embedding_position = nn.Embedding(self.args.max_seq_len, self.hidden_dim)
-        
-        # Encoder
-        self.query = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
-        self.key = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
-        self.value = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
-
-        self.attn = nn.MultiheadAttention(embed_dim=self.hidden_dim, num_heads=self.args.n_heads)
-        self.mask = None # last query에서는 필요가 없지만 수정을 고려하여서 넣어둠
-        self.ffn = Feed_Forward_block(self.hidden_dim)      
-
-        self.ln1 = nn.LayerNorm(self.hidden_dim)
-        self.ln2 = nn.LayerNorm(self.hidden_dim)
-
-        # LSTM
-        self.lstm = nn.LSTM(self.hidden_dim,
-                            self.hidden_dim,
-                            self.n_layers,
-                            batch_first=True,
-                            bidirectional=self.args.bidirectional)
-                            
-        
-        # Fully connected layer
-        self.fc = nn.Linear(self.hidden_dim * (2 if self.args.bidirectional else 1), 1)
-
-       
-        self.activation = nn.Sigmoid()
-
-    def get_pos(self, seq_len):
-        # use sine positional embeddinds
-        return torch.arange(seq_len).unsqueeze(0)
- 
-    def init_hidden(self, batch_size):
-        h = torch.zeros(
-            self.args.n_layers,
-            batch_size,
-            self.args.hidden_dim)
-        h = h.to(self.device)
-
-        c = torch.zeros(
-            self.args.n_layers,
-            batch_size,
-            self.args.hidden_dim)
-        c = c.to(self.device)
-
-        return (h, c)
-
-
-    def forward(self, input):
-        mask, interaction, _ = input[-3], input[-2], input[-1]
-        cont_feats = input[:len(sum(self.args.continuous_feats,[]))]
-        cate_feats = input[len(sum(self.args.continuous_feats,[])): -3]
-        batch_size = interaction.size(0)
-
-        # 범주형 Embedding
-        embed_interaction = self.embedding_interaction(interaction)
-        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
-
-        # 연속형 Embedding
-        cont_feats = [i.unsqueeze(2) for i in cont_feats]
-        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
-    
-        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
-        embed = self.comb_proj(embed)
-
-        # Positional Embedding
-        #row = self.data[index]
-        # 각 data의 sequence length
-        #seq_len = len(row[0])
-        # last query에서는 positional embedding을 하지 않음
-        #position = self.get_pos(self.seq_len).to('cuda')
-        #embed_pos = self.embedding_position(position)
-        #embed = embed + embed_pos
-
-        ####################### ENCODER #####################
-
-        q = self.query(embed).permute(1, 0, 2)
-        
-        
-        q = self.query(embed)[:, -1:, :].permute(1, 0, 2)
-        
-        
-        
-        k = self.key(embed).permute(1, 0, 2)
-        v = self.value(embed).permute(1, 0, 2)
-
-        ## attention
-        # last query only
-        out, _ = self.attn(q, k, v)
-        
-        ## residual + layer norm
-        out = out.permute(1, 0, 2)
-        out = embed + out
-        out = self.ln1(out)
-
-        ## feed forward network
-        out = self.ffn(out)
-
-        ## residual + layer norm
-        out = embed + out
-        out = self.ln2(out)
-
-        ###################### LSTM #####################
-        hidden = self.init_hidden(batch_size)
-        out, hidden = self.lstm(out) #, hidden)
-
-        ###################### DNN #####################
-        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.args.bidirectional else 1))
-        out = self.fc(out)
-
-        preds = self.activation(out).view(batch_size, -1)
-
-        return preds
-
 
 # seoyoon
-
 class Feed_Forward_block(nn.Module):
     """
     out =  Relu( M_out*w1 + b1) *w2 + b2
@@ -570,10 +469,10 @@ class LastQuery(nn.Module):
 
         # # 범주형 Embedding 
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -594,8 +493,9 @@ class LastQuery(nn.Module):
         self.mask = None # last query에서는 필요가 없지만 수정을 고려하여서 넣어둠
         self.ffn = Feed_Forward_block(self.hidden_dim)      
 
-        self.ln1 = nn.LayerNorm(self.hidden_dim)
-        self.ln2 = nn.LayerNorm(self.hidden_dim)
+        if self.args.layer_norm:
+            self.ln1 = nn.LayerNorm(self.hidden_dim)
+            self.ln2 = nn.LayerNorm(self.hidden_dim)
 
         # LSTM
         self.lstm = nn.LSTM(self.hidden_dim,
@@ -610,6 +510,67 @@ class LastQuery(nn.Module):
 
        
         self.activation = nn.Sigmoid()
+
+        if self.args.Tfixup:
+
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+                print('name2 : ', name)
+            elif re.match(r'.*ln.*|.*bn.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+
+            # TODO: 모델 내부의 module 이름이 달라지면 직접 수정해서
+            #       module이 scaling 될 수 있도록 변경해주자
+            print(name)
+
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
+
+    def mask_2d_to_3d(self, mask, batch_size, seq_len):
+        # padding 부분에 1을 주기 위해 0과 1을 뒤집는다
+        mask = torch.ones_like(mask) - mask
+        
+        mask = mask.repeat(1, seq_len)
+        mask = mask.view(batch_size, -1, seq_len)
+        mask = mask.repeat(1, self.args.n_heads, 1)
+        mask = mask.view(batch_size*self.args.n_heads, -1, seq_len)
+
+        return mask.masked_fill(mask==1, float('-inf'))
 
     def get_pos(self, seq_len):
         # use sine positional embeddinds
@@ -674,14 +635,18 @@ class LastQuery(nn.Module):
         ## residual + layer norm
         out = out.permute(1, 0, 2)
         out = embed + out
-        out = self.ln1(out)
+
+        if self.args.layer_norm:
+            out = self.ln1(out)
 
         ## feed forward network
         out = self.ffn(out)
 
         ## residual + layer norm
         out = embed + out
-        out = self.ln2(out)
+        
+        if self.args.layer_norm:
+            out = self.ln2(out)
 
         ###################### LSTM #####################
         hidden = self.init_hidden(batch_size)
@@ -697,7 +662,7 @@ class LastQuery(nn.Module):
 
 
 
-        
+
 def get_model(args, cate_embeddings): # junho
     """
     Load model and move tensors to a given devices.
@@ -721,15 +686,3 @@ def load_model(args, file_name, cate_embeddings):
    
     print("Loading Model from:", model_path, "...Finished.")
     return model
-
-class Feed_Forward_block(nn.Module):
-    """
-    out =  Relu( M_out*w1 + b1) *w2 + b2
-    """
-    def __init__(self, dim_ff):
-        super().__init__()
-        self.layer1 = nn.Linear(in_features=dim_ff, out_features=dim_ff)
-        self.layer2 = nn.Linear(in_features=dim_ff, out_features=dim_ff)
-
-    def forward(self,ffn_in):
-        return self.layer2(F.relu(self.layer1(ffn_in)))
