@@ -1,3 +1,4 @@
+import os
 import argparse
 
 
@@ -5,7 +6,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--seed', default=42, type=int, help='seed')
-    # parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
+    #parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
 
     parser.add_argument('--data_dir', default='/opt/ml/input/data/train_dataset', type=str, help='data directory')
     parser.add_argument('--asset_dir', default='asset/', type=str, help='data directory')
@@ -28,9 +29,9 @@ def parse_args():
     parser.add_argument('--bidirectional', default=True, type=bool, help='bi or uni directional')
 
     # 훈련
-    parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio')  # junho
-    parser.add_argument('--kfold', default=0, type=int, help='utilize kfold')  # junho
-    parser.add_argument('--n_epochs', default=50, type=int, help='number of epochs')
+    parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
+    parser.add_argument('--kfold', default=0, type=int, help='utilize kfold') # junho
+    parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight_decay', default=1e-3, type=float, help='weight decay')  # changhyeong
@@ -38,22 +39,21 @@ def parse_args():
     parser.add_argument('--patience', default=4, type=int, help='for early stopping')
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
     parser.add_argument('--warmup_epoch', default=2, type=float)
-    parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help='accumulating gradient')  # junho
-    parser.add_argument('--to_random_seq', default=False, type=bool, help='whether to use random max_seq')  # junho
-    parser.add_argument('--slide_window', default=3, type=int)  # junho
-    parser.add_argument('--by_window_or_by_testid', default='by_window', type=str,
-                        help='choose split data method or both')
-    parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
+    parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
+    parser.add_argument('--slide_window', default=1, type=int) # junho
+    parser.add_argument('--by_window_or_by_testid', default='by_window', type=str, help='choose split data method or both')
+    parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
+    parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
+
 
     # feature
-    parser.add_argument('--continuous_feats', type=list, nargs='+',
-                        default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'],
-                                 ['testId_mean', 'testId_std'], ['tag_mean', 'tag_std']],
-                        help='duration, tag_solved, tag_avg, testid_solved, testid_avg,\
-                             difficulty_mean, difficulty_std, assId_mean, assId_std, tag_mean, tag_std, \
-                             testId_mean, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
-                             win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
+    parser.add_argument('--continuous_feats', type=list, nargs='+', 
+            default=[['duration'], ['difficulty_mean', 'difficulty_sum'], ['assId_mean', 'assId_sum'], ['tag_mean', 'tag_sum'], ['testId_mean', 'testId_sum']],
+            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_sum, difficulty_std, assId_mean, assId_sum, assId_std,\
+                    tag_mean, tag_sum, tag_std, testId_mean, testId_sum, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg,\
+                    win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+',
                         default=['testId', 'assessmentItemID', 'character',

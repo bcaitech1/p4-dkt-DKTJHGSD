@@ -97,7 +97,6 @@ def process_by_userid(x, grouped, args):
 
     return gp
 
-
 def use_all(dt, max_seq_len, slide):
     seq_len = len(dt[0])
     tmp = np.stack(dt)
