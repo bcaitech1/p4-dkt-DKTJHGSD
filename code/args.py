@@ -50,7 +50,7 @@ def parse_args():
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
-            default=[['duration'], ['difficulty_mean', 'difficulty_sum'], ['assId_mean', 'assId_sum'], ['tag_mean', 'tag_sum'], ['testId_mean', 'testId_sum']], 
+            default=[['duration'], ['difficulty_mean', 'difficulty_sum'], ['assId_mean', 'assId_sum'], ['tag_mean', 'tag_sum'], ['testId_mean', 'testId_sum']],
             help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_sum, difficulty_std, assId_mean, assId_sum, assId_std,\
                     tag_mean, tag_sum, tag_std, testId_mean, testId_sum, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg,\
                     win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
 import os
+import math
 import re
 
 try:
@@ -92,8 +93,6 @@ class LSTM(nn.Module):
 
         return preds
 
-        
-
 
 class LSTMATTN(nn.Module):
     def __init__(self, args, cate_embeddings):
@@ -118,7 +117,7 @@ class LSTMATTN(nn.Module):
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0)for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False),
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -184,7 +183,7 @@ class LSTMATTN(nn.Module):
             # print(name)
 
             if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
             elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
                 temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
             elif re.match(r"encoder.*value.weight$", name):
@@ -446,7 +445,7 @@ class Feed_Forward_block(nn.Module):
     def forward(self,ffn_in):
         return self.layer2(F.relu(self.layer1(ffn_in)))
 
-class LastQuery(nn.Module):  
+class LastQuery(nn.Module):
     def __init__(self, args, cate_embeddings):
         super(LastQuery, self).__init__()
         self.args = args
@@ -461,18 +460,18 @@ class LastQuery(nn.Module):
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
         self.each_cont_idx = [[0, self.num_each_cont[0]]]
 
-        
-        # Embedding 
+
+        # Embedding
         # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
         for i in range(1, len(self.num_each_cont)):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
-        # # 범주형 Embedding 
+        # # 범주형 Embedding
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
 
         # 연속형 Embedding
-        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False), 
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div, bias=False),
                                             nn.LayerNorm(self.hidden_dim//self.hd_div)) for i in self.num_each_cont])
 
 
@@ -483,7 +482,7 @@ class LastQuery(nn.Module):
         # 기존 keetar님 솔루션에서는 Positional Embedding은 사용되지 않습니다
         # 하지만 사용 여부는 자유롭게 결정해주세요 :)
         #self.embedding_position = nn.Embedding(self.args.max_seq_len, self.hidden_dim)
-        
+
         # Encoder
         self.query = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
         self.key = nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim)
@@ -491,7 +490,7 @@ class LastQuery(nn.Module):
 
         self.attn = nn.MultiheadAttention(embed_dim=self.hidden_dim, num_heads=self.args.n_heads)
         self.mask = None # last query에서는 필요가 없지만 수정을 고려하여서 넣어둠
-        self.ffn = Feed_Forward_block(self.hidden_dim)      
+        self.ffn = Feed_Forward_block(self.hidden_dim)
 
         if self.args.layer_norm:
             self.ln1 = nn.LayerNorm(self.hidden_dim)
@@ -503,12 +502,12 @@ class LastQuery(nn.Module):
                             self.n_layers,
                             batch_first=True,
                             bidirectional=self.args.bidirectional)
-                            
-        
+
+
         # Fully connected layer
         self.fc = nn.Linear(self.hidden_dim * (2 if self.args.bidirectional else 1), 1)
 
-       
+
         self.activation = nn.Sigmoid()
 
         if self.args.Tfixup:
@@ -548,7 +547,7 @@ class LastQuery(nn.Module):
             print(name)
 
             if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
             elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
                 temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
             elif re.match(r"encoder.*value.weight$", name):
@@ -564,7 +563,7 @@ class LastQuery(nn.Module):
     def mask_2d_to_3d(self, mask, batch_size, seq_len):
         # padding 부분에 1을 주기 위해 0과 1을 뒤집는다
         mask = torch.ones_like(mask) - mask
-        
+
         mask = mask.repeat(1, seq_len)
         mask = mask.view(batch_size, -1, seq_len)
         mask = mask.repeat(1, self.args.n_heads, 1)
@@ -575,7 +574,7 @@ class LastQuery(nn.Module):
     def get_pos(self, seq_len):
         # use sine positional embeddinds
         return torch.arange(seq_len).unsqueeze(0)
- 
+
     def init_hidden(self, batch_size):
         h = torch.zeros(
             self.args.n_layers,
@@ -605,7 +604,7 @@ class LastQuery(nn.Module):
         # 연속형 Embedding
         cont_feats = [i.unsqueeze(2) for i in cont_feats]
         embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]],2)) for idx, embed in enumerate(self.embedding_cont)]
-    
+
         embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
         embed = self.comb_proj(embed)
 
@@ -621,17 +620,17 @@ class LastQuery(nn.Module):
         ####################### ENCODER #####################
 
         q = self.query(embed).permute(1, 0, 2)
-        
-        
+
+
         q = self.query(embed)[:, -1:, :].permute(1, 0, 2)
-        
+
         k = self.key(embed).permute(1, 0, 2)
         v = self.value(embed).permute(1, 0, 2)
 
         ## attention
         # last query only
         out, _ = self.attn(q, k, v)
-        
+
         ## residual + layer norm
         out = out.permute(1, 0, 2)
         out = embed + out
@@ -644,7 +643,7 @@ class LastQuery(nn.Module):
 
         ## residual + layer norm
         out = embed + out
-        
+
         if self.args.layer_norm:
             out = self.ln2(out)
 
@@ -963,6 +962,194 @@ class SAKTLSTM(nn.Module): #chanhyeong
         
         return preds
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=1000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        self.scale = nn.Parameter(torch.ones(1))
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(
+            0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.scale * self.pe[:x.size(0), :]
+        return self.dropout(x)
+
+
+class Saint(nn.Module):
+
+    def __init__(self, args, cate_embeddings):
+        super(Saint, self).__init__()
+        self.args = args
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+        self.hidden_dim = self.args.hidden_dim
+        self.dropout = self.args.drop_out
+        #self.dropout = 0.
+
+        ##added parameters
+        self.hd_div = args.hd_divider
+        self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
+        self.num_each_cont = [len(i) for i in self.args.continuous_feats]
+        self.each_cont_idx = [[0, self.num_each_cont[0]]]
+
+        for i in range(1, len(self.num_each_cont)):
+            self.each_cont_idx.append(
+                [self.each_cont_idx[i - 1][1], self.each_cont_idx[i - 1][1] + self.num_each_cont[i]])
+
+        ### Embedding
+        # ENCODER embedding
+        self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim // self.hd_div)
+        self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim // self.hd_div)
+        self.embedding_tag = nn.Embedding(self.args.n_tag + 1, self.hidden_dim // self.hd_div)
+
+        # encoder combination projection
+        self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+2), self.hidden_dim)
+        #self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * self.num_feats , self.hidden_dim)
+
+        # DECODER embedding
+        # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
+
+        ## 범주형 Embedding
+        #self.embedding_interaction = nn.Embedding(3, self.hidden_dim // 3)
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim // self.hd_div,
+                                                  padding_idx=0)  # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
+        self.embedding_cate = nn.ModuleList(
+            [nn.Embedding(cate_embeddings[i] + 1, self.hidden_dim // self.hd_div, padding_idx=0) for i in
+             cate_embeddings])
+
+        # 연속형 Embedding
+        self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim // self.hd_div),
+                                                           nn.LayerNorm(self.hidden_dim // self.hd_div)) for i in
+                                             self.num_each_cont])
+
+        # decoder combination projection
+        #self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * 4, self.hidden_dim)
+        self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim)
+
+        # Positional encoding
+        self.pos_encoder = PositionalEncoding(self.hidden_dim, self.dropout, self.args.max_seq_len)
+        self.pos_decoder = PositionalEncoding(self.hidden_dim, self.dropout, self.args.max_seq_len)
+
+        self.transformer = nn.Transformer(
+            d_model=self.hidden_dim,
+            nhead=self.args.n_heads,
+            num_encoder_layers=self.args.n_layers,
+            num_decoder_layers=self.args.n_layers,
+            dim_feedforward=self.hidden_dim,
+            dropout=self.dropout,
+            activation='relu')
+
+        self.fc = nn.Linear(self.hidden_dim, 1)
+        self.activation = nn.Sigmoid()
+
+        self.enc_mask = None
+        self.dec_mask = None
+        self.enc_dec_mask = None
+
+    def get_mask(self, seq_len):
+        mask = torch.from_numpy(np.triu(np.ones((seq_len, seq_len)), k=1))
+
+        return mask.masked_fill(mask == 1, float('-inf'))
+
+    def forward(self, input):
+        # test, question, tag, _, mask, interaction, _ = input
+        question = input[6]
+        test = input[5]
+        tag = input[7]
+        #print(input[5], input[6], input[7])
+
+        mask, interaction, _ = input[-3], input[-2], input[-1]
+        cont_feats = input[:len(sum(self.args.continuous_feats, []))]
+        cate_feats = input[len(sum(self.args.continuous_feats, [])): -3]
+
+        batch_size = interaction.size(0)
+        seq_len = interaction.size(1)
+
+        embed_interaction = self.embedding_interaction(interaction)
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
+        cont_feats = [i.unsqueeze(2) for i in cont_feats]
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
+                      idx, embed in enumerate(self.embedding_cont)]
+
+        # 신나는 embedding
+        # ENCODER
+        embed_test = self.embedding_test(test)
+        embed_question = self.embedding_question(question)
+        embed_tag = self.embedding_tag(tag)
+
+
+        embed_enc = torch.cat([embed_test,
+                               embed_question,
+                               embed_tag, ]
+                              +embed_cate
+                              +embed_cont, 2)
+
+        #embed_enc = torch.cat([embed_interaction]
+        #                      +embed_cate
+        #                      +embed_cont, 2)
+
+        embed_enc = self.enc_comb_proj(embed_enc)
+
+        # DECODER
+        embed_test = self.embedding_test(test)
+        embed_question = self.embedding_question(question)
+        embed_tag = self.embedding_tag(tag)
+
+
+        embed_dec = torch.cat([embed_test,
+                               embed_question,
+                               embed_tag,
+                               embed_interaction]
+                              +embed_cate
+                              +embed_cont, 2)
+        #embed_dec = torch.cat([embed_interaction]
+        #                       +embed_cate
+        #                       +embed_cont, 2)
+        #print((self.hidden_dim // self.hd_div) * self.num_feats , embed_dec.shape)
+
+        embed_dec = self.dec_comb_proj(embed_dec)
+
+        # ATTENTION MASK 생성
+        # encoder하고 decoder의 mask는 가로 세로 길이가 모두 동일하여
+        # 사실 이렇게 3개로 나눌 필요가 없다
+        if self.enc_mask is None or self.enc_mask.size(0) != seq_len:
+            self.enc_mask = self.get_mask(seq_len).to(self.device)
+
+        if self.dec_mask is None or self.dec_mask.size(0) != seq_len:
+            self.dec_mask = self.get_mask(seq_len).to(self.device)
+
+        if self.enc_dec_mask is None or self.enc_dec_mask.size(0) != seq_len:
+            self.enc_dec_mask = self.get_mask(seq_len).to(self.device)
+
+        embed_enc = embed_enc.permute(1, 0, 2)
+        embed_dec = embed_dec.permute(1, 0, 2)
+
+        # Positional encoding
+        embed_enc = self.pos_encoder(embed_enc)
+        embed_dec = self.pos_decoder(embed_dec)
+
+        out = self.transformer(embed_enc, embed_dec,
+                               src_mask=self.enc_mask,
+                               tgt_mask=self.dec_mask,
+                               memory_mask=self.enc_dec_mask)
+
+        out = out.permute(1, 0, 2)
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim)
+        out = self.fc(out)
+
+        preds = self.activation(out).view(batch_size, -1)
+
+        return preds
+
+
 
 def get_model(args, cate_embeddings): # junho
     """
@@ -973,6 +1160,7 @@ def get_model(args, cate_embeddings): # junho
     elif args.model == 'bert': model = Bert(args, cate_embeddings)
     elif args.model == 'convbert': model= ConvBert(args, cate_embeddings) # chanhyeong
     elif args.model == 'lastquery': model= LastQuery(args, cate_embeddings) # seoyoon
+    elif args.model == 'saint' : model = Saint(args, cate_embeddings) #sojoung
     elif args.model == 'saktlstm': model=SAKTLSTM(args,cate_embeddings) #chanhyeong
     return model
 
