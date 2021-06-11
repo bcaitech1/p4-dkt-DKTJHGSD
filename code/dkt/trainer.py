@@ -166,7 +166,7 @@ class Trainer(object): # junho
             if not os.path.exists(self.args.output_dir):
                 os.makedirs(self.args.output_dir)
             with open(write_path, 'w', encoding='utf8') as w:
-                print("writing prediction : {}".format(write_path))
+                print("writing prediction: {}".format(write_path))
                 w.write("id,prediction\n")
                 for id, p in enumerate(total_preds):
                     w.write('{},{}\n'.format(id,p))
