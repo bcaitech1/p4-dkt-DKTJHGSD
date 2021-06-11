@@ -142,17 +142,22 @@ def kfold_useall_data(train, val, args):
     return data_1, data_2
 
 
-def generate_mean_std(df, df_all, x):
+def generate_mean_std_sum(df, df_all, x):
     x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
     x_std = df_all.groupby(x)['answerCode'].std().reset_index()
+    x_sum = df_all.groupby(x)['answerCode'].sum().reset_index()
 
-    x_mean = {key: value for key, value in x_mean.values}
-    x_std = {key: value for key, value in x_std.values}
+    x_mean = {key:value for key, value in x_mean.values}
+    x_std = {key:value for key, value in x_std.values}
+    x_sum = {key:value for key, value in x_sum.values}
 
     df_mean = df[x].apply(lambda x: x_mean[x])
     df_std = df[x].apply(lambda x: x_std[x])
+    df_sum = df[x].apply(lambda x: x_sum[x])
 
-    return df_mean, df_std
+    return df_mean, df_std, df_sum
+
+
 
 
 def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
@@ -335,16 +340,16 @@ class Preprocess:
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x: x[1:4])
         df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x: x[1:4])
-        df['difficulty_mean'], df['difficulty_std'] = generate_mean_std(df, df_all, 'difficulty')
+        df['difficulty_mean'], df['difficulty_std'], df['difficulty_sum'] = generate_mean_std_sum(df, df_all,                                                                                                  'difficulty')
 
         # assessmentItemID mean, std
-        df['assId_mean'], df['assId_std'] = generate_mean_std(df, df_all, 'assessmentItemID')
+        df['assId_mean'], df['assId_std'], df['assId_sum'] = generate_mean_std_sum(df, df_all, 'assessmentItemID')
 
         # tag mean, std
-        df['tag_mean'], df['tag_std'] = generate_mean_std(df, df_all, 'KnowledgeTag')
+        df['tag_mean'], df['tag_std'], df['tag_sum'] = generate_mean_std_sum(df, df_all, 'KnowledgeTag')
 
         # testId mean, std
-        df['testId_mean'], df['testId_std'] = generate_mean_std(df, df_all, 'testId')
+        df['testId_mean'], df['testId_std'], df['testId_sum'] = generate_mean_std_sum(df, df_all, 'testId')
 
         return df
 
