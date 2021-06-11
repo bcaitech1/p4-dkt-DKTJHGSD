@@ -568,6 +568,6 @@ def load_model(args, file_name, cate_embeddings):
     # 1. load model state
     model.load_state_dict(load_state, strict=True)
    
-    print("Loading Model from:", model_path, "...Finished.")
+    print("Loading Model from:", model_path, "...Finished")
     return model
 
