@@ -12,13 +12,14 @@ import wandb
 
 
 class Trainer(object): # junho
-    def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None):
+    def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
         self.epoch = epoch
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
+        self.fold = fold
         self.model = model
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -83,7 +84,6 @@ class Trainer(object): # junho
 
     def validate(self):
         self.model.eval()
-
         total_preds = []
         total_targets = []
         eval_loss = 0
@@ -143,14 +143,25 @@ class Trainer(object): # junho
                         preds = preds.detach().numpy()
                     total_preds+=list(preds)
 
-        write_path = os.path.join(self.args.output_dir, "output.csv")
-        if not os.path.exists(self.args.output_dir):
-            os.makedirs(self.args.output_dir)
-        with open(write_path, 'w', encoding='utf8') as w:
-            print("writing prediction : {}".format(write_path))
-            w.write("id,prediction\n")
-            for id, p in enumerate(total_preds):
-                w.write('{},{}\n'.format(id,p))
+        if self.args.kfold:
+            kfold_output = os.path.join(self.args.output_dir, "kfold_outputs")
+            write_path = os.path.join(kfold_output, f"output_{self.fold}.csv")
+            if not os.path.exists(kfold_output):
+                os.makedirs(kfold_output)
+            with open(write_path, 'w', encoding='utf8') as w:
+                print(f"prediction fold : {self.fold}")
+                w.write("id,prediction\n")
+                for id, p in enumerate(total_preds):
+                    w.write('{},{}\n'.format(id,p))
+        else:
+            write_path = os.path.join(self.args.output_dir, "output.csv")
+            if not os.path.exists(self.args.output_dir):
+                os.makedirs(self.args.output_dir)
+            with open(write_path, 'w', encoding='utf8') as w:
+                print("writing prediction : {}".format(write_path))
+                w.write("id,prediction\n")
+                for id, p in enumerate(total_preds):
+                    w.write('{},{}\n'.format(id,p))
 
 
     # 배치 전처리
@@ -162,6 +173,7 @@ class Trainer(object): # junho
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
@@ -197,7 +209,7 @@ class Trainer(object): # junho
         return feats + [mask, interaction, correct]
 
 
-    # loss계산하고 parameter update!
+    # loss 계산하고 parameter update!
     def __compute_loss(self, preds, targets):
         """
         Args :
