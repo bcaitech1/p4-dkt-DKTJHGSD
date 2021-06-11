@@ -8,16 +8,16 @@ def parse_args():
     parser.add_argument('--seed', default=42, type=int, help='seed')
     #parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
 
-    parser.add_argument('--data_dir', default='/opt/ml/input/data/train_dataset', type=str, help='data directory')
+    parser.add_argument('--data_dir', default='/opt/ml/input/', type=str, help='data directory')
     parser.add_argument('--asset_dir', default='asset/', type=str, help='data directory')
 
-    parser.add_argument('--file_name', default='train_data.csv', type=str, help='train file name')
+    parser.add_argument('--file_name', default='riiid_ver2_half.csv', type=str, help='train file name')
     parser.add_argument('--model_dir', default='models/', type=str, help='model directory')
 
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
 
-    parser.add_argument('--max_seq_len', default=20, type=int, help='max sequence length')
+    parser.add_argument('--max_seq_len', default=30, type=int, help='max sequence length')
     parser.add_argument('--num_workers', default=2, type=int, help='number of workers')
 
     # 모델
@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
     parser.add_argument('--slide_window', default=1, type=int) # junho
     parser.add_argument('--by_window_or_by_testid', default='by_window', type=str, help='choose split data method or both')
-    parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
     parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
 
@@ -65,15 +65,13 @@ def parse_args():
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
                         help='scheduler type')  # [plateau, steplr, cosine, linear]
-    parser.add_argument('--mode', default='inference', type=str, help='pretrain, train or inference')  # junho, sooyoun
+    parser.add_argument('--mode', default='pretrain', type=str, help='pretrain, train or inference')  # junho, sooyoun
     parser.add_argument('--use_pretrained_model', default=False, type=bool,
                         help='if True, use pretrained model when training a model')  # sooyoun
-    parser.add_argument('--merge_train_test', default=True, type=bool,
-                        help='if True, merge train dataset and test dataset for training')  # sooyoun
-    parser.add_argument('--reprocess_data', default=False, type=bool,
+    parser.add_argument('--reprocess_data', default=True, type=bool,
                         help='if True, reprocess data using feature engineering and preprocessing')  # sooyoun
     parser.add_argument('--sweep', default=False, type=bool, help='if True, sweep mode')  # chanhyeong
-    parser.add_argument('--save_name', default="no_finetuned", type=str, help='save name')  # chanhyeong
+    parser.add_argument('--save_name', default="pretrain", type=str, help='save name')  # chanhyeong
     args = parser.parse_args()
 
     return args

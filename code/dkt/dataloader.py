@@ -141,14 +141,14 @@ def kfold_useall_data(train, val, args):
     return data_1, data_2
 
 
-def generate_mean_std_sum(df, df_all, x):
-    x_mean = df_all.groupby(x)['answerCode'].mean().reset_index()
-    x_std = df_all.groupby(x)['answerCode'].std().reset_index()
-    x_sum = df_all.groupby(x)['answerCode'].sum().reset_index()
+def generate_mean_std_sum(df, x):
+    x_mean = df.groupby(x)['answerCode'].mean().reset_index()
+    x_std = df.groupby(x)['answerCode'].std().reset_index()
+    x_sum = df.groupby(x)['answerCode'].sum().reset_index()
 
-    x_mean = {key:value for key, value in x_mean.values}
-    x_std = {key:value for key, value in x_std.values}
-    x_sum = {key:value for key, value in x_sum.values}
+    x_mean = {key: value for key, value in x_mean.values}
+    x_std = {key: value for key, value in x_std.values}
+    x_sum = {key: value for key, value in x_sum.values}
 
     df_mean = df[x].apply(lambda x: x_mean[x])
     df_std = df[x].apply(lambda x: x_std[x])
@@ -292,11 +292,12 @@ class Preprocess:
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
 
-        df['max_index'] = 0
-        df['min_index'] = 0
-        df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
-                        pm_processes=multiprocessing.cpu_count())
-        df = pd.concat(df)
+        if self.args.mode != 'pretrain':
+            df['max_index'] = 0
+            df['min_index'] = 0
+            df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
+                            pm_processes=multiprocessing.cpu_count())
+            df = pd.concat(df)
 
         for col in self.args.categorical_feats:
             le = LabelEncoder()
@@ -325,30 +326,18 @@ class Preprocess:
                               final_df, pm_pbar=True, pm_processes=multiprocessing.cpu_count())
         df = pd.concat(final_df)
 
-        # mean, std
-        if self.args.merge_train_test and self.args.mode != 'pretrain':
-            df_train = pd.read_csv(os.path.join(self.args.data_dir, 'train_data.csv'))
-            df_test = pd.read_csv(os.path.join(self.args.data_dir, 'test_data.csv'))
-            df_test = df_test.loc[df.answerCode != -1]
-            df_all = pd.concat([df_train, df_test])
-
-        else:
-            # pretrain의 경우 train/test dataset이 없으므로 전체 데이터를 그냥 사용
-            df_all = df
-
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x: x[1:4])
-        df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x: x[1:4])
-        df['difficulty_mean'], df['difficulty_std'], df['difficulty_sum'] = generate_mean_std_sum(df, df_all,                                                                                                  'difficulty')
+        df['difficulty_mean'], df['difficulty_std'], df['difficulty_sum'] = generate_mean_std_sum(df, 'difficulty')
 
         # assessmentItemID mean, std
-        df['assId_mean'], df['assId_std'], df['assId_sum'] = generate_mean_std_sum(df, df_all, 'assessmentItemID')
+        df['assId_mean'], df['assId_std'], df['assId_sum'] = generate_mean_std_sum(df, 'assessmentItemID')
 
         # tag mean, std
-        df['tag_mean'], df['tag_std'], df['tag_sum'] = generate_mean_std_sum(df, df_all, 'KnowledgeTag')
+        df['tag_mean'], df['tag_std'], df['tag_sum'] = generate_mean_std_sum(df, 'KnowledgeTag')
 
         # testId mean, std
-        df['testId_mean'], df['testId_std'], df['testId_sum'] = generate_mean_std_sum(df, df_all, 'testId')
+        df['testId_mean'], df['testId_std'], df['testId_sum'] = generate_mean_std_sum(df, 'testId')
 
         return df
 
@@ -356,13 +345,11 @@ class Preprocess:
 
         processed_file_name_dict = {
             'pretrain': 'riiid_df.csv',
-            'train': 'df.csv',
+            'train': 'merged_df.csv',
             'inference': 'test_df.csv'
         }
 
         save_file_path = os.path.join(self.args.output_dir, processed_file_name_dict[self.args.mode])
-        if self.args.mode == 'train' and self.args.merge_train_test:
-            save_file_path = os.path.join(self.args.output_dir, 'merged_df.csv')
 
         if os.path.isfile(save_file_path) and not self.args.reprocess_data:
             df = pd.read_csv(save_file_path)
@@ -371,6 +358,11 @@ class Preprocess:
 
             if self.args.mode == 'pretrain':
                 df = pd.read_csv(csv_file_path)
+            elif self.args.mode == 'train':
+                df_train = pd.read_csv(os.path.join(self.args.data_dir, 'train_data.csv'))
+                df_test = pd.read_csv(os.path.join(self.args.data_dir, 'test_data.csv'))
+                df_test = df_test.loc[df_test.answerCode != -1]
+                df = pd.concat([df_train, df_test])
             else:
                 df = pd.read_csv(csv_file_path, parse_dates=['Timestamp'])  # , nrows=100000)
 
