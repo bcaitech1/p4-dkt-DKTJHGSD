@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score
 
 import wandb
 
-
+import torch.nn as nn
 class Trainer(object): # junho
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
@@ -27,7 +27,6 @@ class Trainer(object): # junho
 
     def train(self):
         self.model.train()
-
         total_preds = []
         total_targets = []
         global_step, epoch_loss = 0, 0
@@ -36,6 +35,15 @@ class Trainer(object): # junho
                 input = self.__process_batch(batch)
                 preds = self.model(input)
                 targets = input[-1] # correct
+
+                # print('-'*150)
+                # print('original_pred')
+                # print(preds)
+                # print(preds.shape)
+                # print('lana_pred')
+                # print(preds[:,-1])
+                # print(preds[:,-1].shape)
+
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -46,9 +54,6 @@ class Trainer(object): # junho
                     self.optimizer.zero_grad()
                     if self.args.scheduler != 'plateau':
                         self.scheduler.step()  # Update learning rate schedule
-
-                # if step % args.log_steps == 0:
-                #     print(f"Training steps: {step} Loss: {str(loss.item())}")
 
                 # predictions
                 preds = preds[:,-1]
@@ -81,7 +86,6 @@ class Trainer(object): # junho
 
         return auc, acc, loss_avg
 
-
     def validate(self):
         self.model.eval()
         total_preds = []
@@ -91,6 +95,10 @@ class Trainer(object): # junho
             with torch.no_grad():
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
+
+                    preds = self.model(input)
+                    targets = input[-1] # correct
+
                     preds = self.model(input)
                     targets = input[-1] # correct
                     loss = self.__compute_loss(preds, targets)
@@ -109,7 +117,7 @@ class Trainer(object): # junho
                     total_preds.append(preds)
                     total_targets.append(targets)
 
-                    # 전체 손실 값 계산
+        #             # 전체 손실 값 계산
                     eval_loss += loss.item()
 
                     # update progress bar

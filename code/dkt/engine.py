@@ -4,6 +4,7 @@ from .dataloader import get_loaders
 from .optimizer import get_optimizer
 from .scheduler import call_scheduler
 from .model import get_model, load_model # junho
+#from .trainer12 import Trainer
 from .trainer import Trainer
 import wandb
 import math
@@ -38,8 +39,7 @@ def run(args, train_data = None, valid_data = None, test_data = None, cate_embed
             print(f'\tValid Loss: {eval_loss:.3f} | Valid Acc: {round(eval_acc*100, 2)}% | Valid AUC: {round(eval_auc*100, 2)}%')
 
             if args.kfold: 
-                wandb.log({f"k{fold}_train_loss": train_loss, f"k{fold}_train_auc": train_auc, f"k{fold}_train_acc":train_acc,
-                        f"k{fold}_valid_loss" : eval_loss, f"k{fold}_valid_auc":eval_auc, f"k{fold}_valid_acc":eval_acc})
+                wandb.log({f"k{fold}_valid_auc":eval_auc})
             else:
                 wandb.log({"train_loss": train_loss, "train_auc": train_auc, "train_acc":train_acc,
                         "valid_loss" : eval_loss, "valid_auc":eval_auc, "valid_acc":eval_acc})

@@ -46,6 +46,7 @@ def process_by_userid(x, grouped, args): # junho
     gp['time'] = gp['time'] - gp['Timestamp']
     gp['time'] = gp['time'].apply(lambda x:int(x.total_seconds()))
     gp['duration'] = gp['time'].apply(lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4*60) & (gp['time'] >= 0)].mean())
+    gp['lag_time'] = gp['duration'].shift(1, fill_value=0)
     gp['character'] = gp['time'].apply(get_character)
 
     timetuple = tmp.apply(convert_time)
@@ -294,11 +295,12 @@ class Preprocess:
         # mean, std
         df_train = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'train_data.csv')) 
         df_test = pd.read_csv(os.path.join('/opt/ml/input/data/train_dataset', 'test_data.csv')) 
-        df_test = df_test.loc[df.answerCode!=-1]
+        df_test = df_test.loc[df_test.answerCode!=-1]
         df_all = pd.concat([df_train, df_test])
         
         # difficulty mean, std
         df['difficulty'] = df['assessmentItemID'].apply(lambda x:x[1:4])
+        df['part'] = df['assessmentItemID'].apply(lambda x:x[1:4])
         df_all['difficulty'] = df_all['assessmentItemID'].apply(lambda x:x[1:4])
         df['difficulty_mean'], df['difficulty_std'] = generate_mean_std(df, df_all, 'difficulty')
 
@@ -312,18 +314,19 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        #csv_file_path = os.path.join(self.args.data_dir, file_name) # 
-        #df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) #, nrows=100000)
-        df = self.__feature_engineering(df)
-        df = self.__preprocessing(df, is_train)
+        # csv_file_path = os.path.join(self.args.data_dir, file_name) # 
+        # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        # df = self.__feature_engineering(df)
+        # df = self.__preprocessing(df, is_train)
         
-        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', mode='w') # dataframe csv파일로 저장
+        # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/lana_df.csv', mode='w') # dataframe csv파일로 저장
 
         ## merged train,test
-        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/merged_after_preprocessing_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
         ## train df
         #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        ## lana df
+        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/lana_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)

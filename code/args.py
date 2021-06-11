@@ -17,8 +17,8 @@ def parse_args():
     parser.add_argument('--output_dir', default='output/', type=str, help='output directory')
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
     
-    parser.add_argument('--max_seq_len', default=20, type=int, help='max sequence length')
-    parser.add_argument('--num_workers', default=2, type=int, help='number of workers')
+    parser.add_argument('--max_seq_len', default=30, type=int, help='max sequence length')
+    parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
     parser.add_argument('--hidden_dim', default=300, type=int, help = 'hidden dimension size')
@@ -43,22 +43,22 @@ def parse_args():
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
     parser.add_argument('--slide_window', default=3, type=int) # junho
     parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method or both')
-    parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length') # 3
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
-            default=[['duration'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['testId_mean', 'testId_std'], ['tag_mean', 'tag_std']], 
+            default=[['duration'], ['lag_time'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['testId_mean', 'testId_std'], ['tag_mean', 'tag_std']], 
             help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_std, assId_mean, assId_std, \
                     tag_mean, tag_std, testId_mean, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
                     win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+', 
-            default=['testId', 'assessmentItemID', 'KnowledgeTag', 'character', 'week_number', 'mday', 'hour'],
+            default=['testId', 'assessmentItemID', 'KnowledgeTag', 'part', 'character', 'week_number', 'mday', 'hour'],
             help = 'testId, assessmentItemID, KnowledgeTag, character, difficulty, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='lstmattn', type=str, help='model type')
+    parser.add_argument('--model', default='lana', type=str, help='model type')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type') # [plateau, steplr, cosine, linear]
     parser.add_argument('--mode', default='train', type=str, help='train or inference') # junho

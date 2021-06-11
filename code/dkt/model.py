@@ -10,7 +10,6 @@ try:
 except:
     from transformers.models.bert.modeling_bert import BertConfig, BertEncoder, BertModel    
 
-
 class LSTM(nn.Module):
     def __init__(self, args, cate_embeddings):
         super(LSTM, self).__init__()
@@ -145,55 +144,6 @@ class LSTMATTN(nn.Module):
         self.fc = nn.Linear(self.hidden_dim *(2 if self.bidirectional else 1), 1)
 
         self.activation = nn.Sigmoid()
-
-         # T-Fixup
-        if self.args.Tfixup:
-
-            # 초기화 (Initialization)
-            self.tfixup_initialization()
-            print("T-Fixup Initialization Done")
-
-            # 스케일링 (Scaling)
-            self.tfixup_scaling()
-            print(f"T-Fixup Scaling Done")
-
-    def tfixup_initialization(self):
-        # 우리는 padding idx의 경우 모두 0으로 통일한다
-        padding_idx = 0
-
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
-                nn.init.constant_(param[padding_idx], 0)
-            elif re.match(r'.*ln.*|.*bn.*', name):
-                continue
-            elif re.match(r'.*weight*', name):
-                # nn.init.xavier_uniform_(param)
-                nn.init.xavier_normal_(param)
-
-    def tfixup_scaling(self):
-        temp_state_dict = {}
-
-        # 특정 layer들의 값을 스케일링한다
-        for name, param in self.named_parameters():
-
-            # TODO: 모델 내부의 module 이름이 달라지면 직접 수정해서
-            #       module이 scaling 될 수 있도록 변경해주자
-            # print(name)
-
-            if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param          
-            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
-            elif re.match(r"encoder.*value.weight$", name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
-
-        # 나머지 layer는 원래 값 그대로 넣는다
-        for name in self.state_dict():
-            if name not in temp_state_dict:
-                temp_state_dict[name] = self.state_dict()[name]
-
-        self.load_state_dict(temp_state_dict)
 
     def init_hidden(self, batch_size):
         h = torch.zeros(
@@ -593,6 +543,7 @@ class LastQuery(nn.Module):
         return preds
 
 
+from .lana_model import LANA
 
 def get_model(args, cate_embeddings): # junho
     """
@@ -603,6 +554,7 @@ def get_model(args, cate_embeddings): # junho
     elif args.model == 'bert': model = Bert(args, cate_embeddings)
     elif args.model == 'convbert': model= ConvBert(args, cate_embeddings) # chanhyeong
     elif args.model == 'lastquery': model= LastQuery(args, cate_embeddings) # seoyoonbaek
+    elif args.model == 'lana' : model = LANA(args, cate_embeddings)
 
     return model
 
