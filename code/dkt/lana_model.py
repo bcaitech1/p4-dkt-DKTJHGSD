@@ -313,7 +313,7 @@ class PositionalBias(nn.Module):
         relative_position_buckets = relative_buckets.to(pos_seq.device)
 
         relative_bias = self.relative_attention_bias(relative_position_buckets)
-        relative_bias = relative_bias.permute(0, 3, 1, 2)
+        relative_bias = relative_bias.permute(0, 3, 1, 2).contiguous()
 
         position_bias = absolute_bias + relative_bias
         return position_bias
@@ -330,28 +330,37 @@ class LANA(nn.Module):
 
         self.pos_embed = PositionalBias(self.args, self.max_seq, self.args.hidden_dim, self.args.n_heads, bidirectional=False, num_buckets=32)
 
-        self.encoder_resp_embed = nn.Embedding(3, self.args.hidden_dim//self.hd_div,
-                                               padding_idx=0)  # Answer Embedding, 0 for padding
-        self.encoder_testid = nn.Embedding(cate_embeddings['testId']+1, self.args.hidden_dim//self.hd_div,
-                                              padding_idx=0)  # Exercise ID Embedding, 0 for padding
-        self.encoder_assid = nn.Embedding(cate_embeddings['assessmentItemID']+1, self.args.hidden_dim//self.hd_div,
-                                              padding_idx=0)  # Exercise ID Embedding, 0 for padding                                      
-        self.encoder_part = nn.Embedding(cate_embeddings['part']+1, self.args.hidden_dim//self.hd_div,
-                                               padding_idx=0)  # Part Embedding, 0 for padding
-        self.encoder_tag = nn.Embedding(cate_embeddings['KnowledgeTag'],self.args.hidden_dim//self.hd_div, padding_idx=0)
-        self.encoder_linear = nn.Linear(4 * (self.args.hidden_dim//self.hd_div), self.args.hidden_dim)
+
+        ## encoder
+        self.encoder_interaction = nn.Embedding(3, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        self.encoder_testid = nn.Embedding(cate_embeddings['testId']+1, self.args.hidden_dim//self.hd_div, padding_idx=0)  
+        self.encoder_assid = nn.Embedding(cate_embeddings['assessmentItemID']+1, self.args.hidden_dim//self.hd_div, padding_idx=0)                                
+        self.encoder_part = nn.Embedding(cate_embeddings['part']+1, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        self.encoder_tag = nn.Embedding(cate_embeddings['KnowledgeTag']+1,self.args.hidden_dim//self.hd_div, padding_idx=0)
+        self.encoder_dif_ms = nn.Sequential(nn.Linear(2, self.args.hidden_dim//self.hd_div), nn.LeakyReLU(),
+                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div))
+        self.encoder_ass_m = nn.Sequential(nn.Linear(1, self.args.hidden_dim//self.hd_div),  nn.LeakyReLU(),
+                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div))
+        self.encoder_testid_ms = nn.Sequential(nn.Linear(2, self.args.hidden_dim//self.hd_div),  nn.LeakyReLU(),
+                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div))
+        self.encoder_tag_ms = nn.Sequential(nn.Linear(2, self.args.hidden_dim//self.hd_div),  nn.LeakyReLU(),
+                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div))
+
+        self.encoder_linear = nn.Linear(9 * (self.args.hidden_dim//self.hd_div),  self.args.hidden_dim)
         self.encoder_layernorm = nn.LayerNorm(self.args.hidden_dim)
         self.encoder_dropout = nn.Dropout(self.args.drop_out)
 
-        self.decoder_resp_embed = nn.Embedding(3, self.args.hidden_dim//self.hd_div,
-                                               padding_idx=0)  # Answer Embedding, 0 for padding
-        self.decoder_duration = nn.Sequential(nn.Linear(1, self.args.hidden_dim//self.hd_div),
+        ## decoder
+        self.decoder_duration = nn.Sequential(nn.Linear(1, self.args.hidden_dim//self.hd_div), nn.LeakyReLU(),
+                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div)) 
+        self.decoder_lagtime = nn.Sequential(nn.Linear(1, self.args.hidden_dim//self.hd_div), nn.LeakyReLU(),
                                               nn.LayerNorm(self.args.hidden_dim//self.hd_div))
-        self.decoder_lagtime = nn.Sequential(nn.Linear(1, self.args.hidden_dim//self.hd_div),
-                                              nn.LayerNorm(self.args.hidden_dim//self.hd_div))
-        self.decoder_interaction = nn.Embedding(3, self.args.hidden_dim//self.hd_div,
-                                                  padding_idx=0)  
-        self.decoder_linear = nn.Linear(3 * (self.args.hidden_dim//self.hd_div), self.args.hidden_dim)
+        self.decoder_wnum = nn.Embedding(cate_embeddings['week_number']+1, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        self.decoder_mday = nn.Embedding(cate_embeddings['mday']+1, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        self.decoder_hour = nn.Embedding(cate_embeddings['hour']+1, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        self.decoder_character = nn.Embedding(cate_embeddings['character']+1, self.args.hidden_dim//self.hd_div, padding_idx=0) 
+        
+        self.decoder_linear = nn.Linear(6 * (self.args.hidden_dim//self.hd_div), self.args.hidden_dim)
         self.decoder_layernorm = nn.LayerNorm(self.args.hidden_dim)
         self.decoder_dropout = nn.Dropout(self.args.drop_out)
 
@@ -370,30 +379,37 @@ class LANA(nn.Module):
         return torch.arange(self.max_seq).unsqueeze(0)
 
     def forward(self, input):
-        correct = input[-1]
-        correct = correct.long()
         testid = input[9]
         assid = input[10]
         part = input[12]
         tag = input[11]
+        character, week_num, mday, hour = input[13], input[14], input[15], input[16]
+        
+        dif_mean, dif_std, ass_mean, testid_mean, testid_std, tag_mean, tag_std = input[1:8]
+        dif_mean, dif_std, ass_mean = dif_mean.unsqueeze(2), dif_std.unsqueeze(2), ass_mean.unsqueeze(2)
+        testid_mean, testid_std, tag_mean, tag_std = testid_mean.unsqueeze(2), testid_std.unsqueeze(2), tag_mean.unsqueeze(2), tag_std.unsqueeze(2)
 
         duration = input[0]
         lagtime = input[1]
         interaction = input[-2]
         batch_size = interaction.size(0)
 
-        ltime = lagtime.clone()
 
+        ltime = lagtime.clone()
         pos_embed = self.pos_embed(self.get_pos_seq().to(self.device))
 
         # encoder embedding
-        #e_correct_seq = self.encoder_resp_embed(correct) # correctness
         testid_seq = self.encoder_testid(testid) # content id
         assid_seq = self.encoder_assid(assid) 
         part_seq = self.encoder_part(part) # part
         tag_seq = self.encoder_tag(tag)
+        interaction_seq = self.encoder_interaction(interaction)
+        dif_ms_seq = self.encoder_dif_ms(torch.cat([dif_mean, dif_std], 2))
+        ass_m_seq = self.encoder_ass_m(ass_mean)
+        testid_ms_seq = self.encoder_testid_ms(torch.cat([testid_mean, testid_std], 2))
+        tag_ms_seq = self.encoder_tag_ms(torch.cat([tag_mean, tag_std], 2))
 
-        encoder_input = torch.cat([part_seq, assid_seq, testid_seq, tag_seq], dim=-1)
+        encoder_input = torch.cat([interaction_seq, part_seq, assid_seq, testid_seq, tag_seq, dif_ms_seq, ass_m_seq, testid_ms_seq, tag_ms_seq], dim=-1)
         encoder_input = self.encoder_linear(encoder_input)
         encoder_input = self.encoder_layernorm(encoder_input)
         encoder_input = self.encoder_dropout(encoder_input)
@@ -402,8 +418,12 @@ class LANA(nn.Module):
         #d_correct_seq = self.decoder_resp_embed(correct) # correctness
         duration_seq = self.decoder_duration(duration.unsqueeze(2))
         lagtime_seq = self.decoder_lagtime(lagtime.unsqueeze(2)) # lag_time_s
-        interaction_seq = self.decoder_interaction(interaction)
-        decoder_input = torch.cat([duration_seq, lagtime_seq, interaction_seq], dim=-1)
+        wnum_seq = self.decoder_wnum(week_num)
+        mday_seq = self.decoder_mday(mday)
+        hour_seq = self.decoder_hour(hour)
+        character_seq = self.decoder_character(character)
+
+        decoder_input = torch.cat([duration_seq, lagtime_seq, character_seq, wnum_seq, mday_seq, hour_seq], dim=-1)
         decoder_input = self.decoder_linear(decoder_input)
         decoder_input = self.decoder_layernorm(decoder_input)
         decoder_input = self.decoder_dropout(decoder_input)

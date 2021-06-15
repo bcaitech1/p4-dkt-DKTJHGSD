@@ -314,10 +314,10 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-        # csv_file_path = os.path.join(self.args.data_dir, file_name) # 
-        # df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
-        # df = self.__feature_engineering(df)
-        # df = self.__preprocessing(df, is_train)
+        csv_file_path = os.path.join(self.args.data_dir, file_name) # 
+        df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) #, nrows=100000)
+        df = self.__feature_engineering(df)
+        df = self.__preprocessing(df, is_train)
         
         # df.to_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/lana_df.csv', mode='w') # dataframe csv파일로 저장
 
@@ -326,7 +326,7 @@ class Preprocess:
         ## train df
         #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
         ## lana df
-        df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/lana_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
+        #df = pd.read_csv('/opt/ml/p4-dkt-DKTJHGSD/code/output/lana_df.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기 
 
         # 추후 feature를 embedding할 시에 embedding_layer의 input 크기를 결정할때 사용
         cate_embeddings = defaultdict(int)

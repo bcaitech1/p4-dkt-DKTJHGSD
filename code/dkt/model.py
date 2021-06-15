@@ -562,6 +562,7 @@ def load_model(args, file_name, cate_embeddings):
     model_path = os.path.join(args.model_dir, file_name)
     print("Loading Model from:", model_path)
     load_state = torch.load(model_path)
+    #load_state = torch.load('/opt/ml/p4-dkt-DKTJHGSD/code/models/default_1.pt')
     model = get_model(args, cate_embeddings)
 
     # 1. load model state
