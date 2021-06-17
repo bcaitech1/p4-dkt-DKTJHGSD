@@ -992,7 +992,6 @@ class Saint(nn.Module):
 
         self.hidden_dim = self.args.hidden_dim
         self.dropout = self.args.drop_out
-        #self.dropout = 0.
 
         ##added parameters
         self.hd_div = args.hd_divider
@@ -1012,7 +1011,6 @@ class Saint(nn.Module):
 
         # encoder combination projection
         self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+2), self.hidden_dim)
-        #self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * self.num_feats , self.hidden_dim)
 
         # DECODER embedding
         # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
@@ -1031,8 +1029,9 @@ class Saint(nn.Module):
                                              self.num_each_cont])
 
         # decoder combination projection
-        #self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * 4, self.hidden_dim)
-        self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim)
+        self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * 1,
+                                       self.hidden_dim)  # interaction + cate_
+        #self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim) #interaction + cate_
 
         # Positional encoding
         self.pos_encoder = PositionalEncoding(self.hidden_dim, self.dropout, self.args.max_seq_len)
@@ -1054,17 +1053,67 @@ class Saint(nn.Module):
         self.dec_mask = None
         self.enc_dec_mask = None
 
+        # T-Fixup
+        if self.args.Tfixup:
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            #print(name)
+            if len(param.shape) == 1:
+                continue
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+            elif re.match(r'.*Norm.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+            print(name)
+
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
+            elif re.match(r'.*Norm.*', name):
+                continue
+            elif re.match(r'encoder.*dense.*weight$|encoder.*attention.output.*weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2 ** 0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
+
     def get_mask(self, seq_len):
         mask = torch.from_numpy(np.triu(np.ones((seq_len, seq_len)), k=1))
 
         return mask.masked_fill(mask == 1, float('-inf'))
 
     def forward(self, input):
-        # test, question, tag, _, mask, interaction, _ = input
-        question = input[6]
-        test = input[5]
-        tag = input[7]
-        #print(input[5], input[6], input[7])
+        #['duration', 'difficulty_mean', 'difficulty_sum', 'assId_mean', 'assId_sum', 'tag_mean', 'tag_sum', 'testId_mean', 'testId_sum', 'testId', 'assessmentItemID', 'KnowledgeTag', 'character', 'week_number', 'mday', 'hour', 'answerCode', 'max_index']
+        #input
+        question = input[10]
+        test = input[9]
+        tag = input[11]
 
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats, []))]
@@ -1079,41 +1128,34 @@ class Saint(nn.Module):
         embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
                       idx, embed in enumerate(self.embedding_cont)]
 
-        # 신나는 embedding
         # ENCODER
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
 
-
+        # exercise information
         embed_enc = torch.cat([embed_test,
                                embed_question,
                                embed_tag, ]
                               +embed_cate
                               +embed_cont, 2)
-
-        #embed_enc = torch.cat([embed_interaction]
-        #                      +embed_cate
-        #                      +embed_cont, 2)
-
         embed_enc = self.enc_comb_proj(embed_enc)
+
 
         # DECODER
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
 
+        # response
+        #embed_dec = torch.cat([embed_test,
+        #                       embed_question,
+        #                       embed_tag,
+        #                       embed_interaction]
+        #                      +embed_cate
+        #                      +embed_cont, 2)
 
-        embed_dec = torch.cat([embed_test,
-                               embed_question,
-                               embed_tag,
-                               embed_interaction]
-                              +embed_cate
-                              +embed_cont, 2)
-        #embed_dec = torch.cat([embed_interaction]
-        #                       +embed_cate
-        #                       +embed_cont, 2)
-        #print((self.hidden_dim // self.hd_div) * self.num_feats , embed_dec.shape)
+        embed_dec = torch.cat([embed_interaction], 2)
 
         embed_dec = self.dec_comb_proj(embed_dec)
 
