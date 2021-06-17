@@ -18,6 +18,13 @@ def convert_time(s):
 
 
 def get_character(x):
+    '''
+        Convert elapse time into categorical range in order to group individuals by the time they spent to solve each problem.
+        Time set range below is an outcome from our Dataset EDA.
+        We believe this range implies each individuals characteristics. 
+        For example, a User who solves a question in less then 23 seconds, either means that he/she guessed the answer or 
+        is simply impatient. 
+    '''
     if x < 0:
         return 'A'
     elif x < 23:
@@ -39,6 +46,19 @@ def get_character(x):
 
 
 def process_by_userid(x, grouped, args):
+    """Make features by userID
+    week_number: Weeks of the year
+    mday: Day of the week
+    hour: Hour
+    duration: The time to solve a assessmentItemID
+    character: Categorical duration
+    lag_time:
+    tag_solved, testid_solved: Cumulative or Moving # of solved tags, testids
+    tag_avg, testid_avg: Cumulative or Moving average of tags, testids
+    
+    Returns: Data frame
+        Data frame with features added
+    """
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID', 'Timestamp'], ascending=True)
 
@@ -99,6 +119,16 @@ def process_by_userid(x, grouped, args):
     return gp
 
 def use_all(dt, max_seq_len, slide):
+    """use all sequences
+    This function split train data by max_seq_len and slide window
+    
+    Args:
+        max_seq_len: length of each train sequences
+        slide: overlap ratio
+        
+    Returns: List
+        List of tuple
+    """
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     new = [tuple([np.array(j) for j in tmp[:, i:i + max_seq_len]]) for i in range(0, seq_len - 8, max_seq_len // slide)]
@@ -106,6 +136,16 @@ def use_all(dt, max_seq_len, slide):
 
 
 def kfold_useall_data(train, val, args):
+    """k-folded use all data
+    use all data by k folded train or validation data
+    
+    Args:
+        train: train data
+        val: validation data
+    Returns: (List, List)
+        data_1: list of train data
+        data_2: list of validation data
+    """
     # 모든 데이터 사용
     if args.by_window_or_by_testid == 'by_testid':
         data_1 = sum(
@@ -126,6 +166,14 @@ def kfold_useall_data(train, val, args):
 
 
 def generate_mean_std_sum(df, x):
+    """Make mean, std features
+    Args:
+        x: testid, difficulty, assessmentitemid, knowledgetag
+    Returns: (Series, Series, Series)
+        df_mean: average of x
+        df_std: std of x
+        df_sum: sum of x
+    """
     x_mean = df.groupby(x)['answerCode'].mean().reset_index()
     x_std = df.groupby(x)['answerCode'].std().reset_index()
     x_sum = df.groupby(x)['answerCode'].sum().reset_index()
@@ -141,6 +189,16 @@ def generate_mean_std_sum(df, x):
     return df_mean, df_std, df_sum
 
 def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
+    """Use all data by testid
+    use all data but don't cut in a middle
+    Args:
+        max_seq_len: split train data under max_seq_len
+        test_cnt: # of testid to use
+        args: args
+        is_train: train or inference
+    Returns: List
+        List of tuple
+    """
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     span = tmp[-1, :].astype(int)
@@ -175,6 +233,15 @@ def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
     return new
 
 def make_max_min_idx(x, group):
+    """Make max and min index by userid
+    Make max and min index by userid to use in use_by_testid function
+    Args:
+        x: userid
+        group: pandas group
+        
+    Returns: Dataframe
+        df: max and min features added Dataframe
+    """
     df = group.get_group(x).reset_index(drop=True)
 
     testid = df.loc[0, 'testId']
@@ -196,6 +263,9 @@ def make_max_min_idx(x, group):
 
 
 class Preprocess:
+    """
+        This class runs feature engineering and preprocessing to load the train and validation data
+    """
     def __init__(self, args):
         self.args = args
         self.train_data = None
@@ -247,10 +317,27 @@ class Preprocess:
         return data_1, data_2
 
     def __save_labels(self, encoder, name):
+        """Save labels
+        Save labels. These saved labels used for inference.
+        
+        Args:
+            encoder: LabelEncoder
+            name: class name
+        """
         le_path = os.path.join(self.args.asset_dir, name + '_classes.npy')
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train=True):
+        """Data preprocessing
+        This function processes data(Label Encoding) for use in DL models
+        
+        Args:
+            df: Dataframe
+            is_train: train or inference
+            
+        Returns: Dataframe
+            df: preprocessed Dataframe
+        """
         if self.args.mode == 'pretrain':
             self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
@@ -285,7 +372,10 @@ class Preprocess:
 
         return df
 
-    def __feature_engineering(self, df):  # junho
+    def __feature_engineering(self, df): 
+        """
+        Feauture engineering through multiprocessing
+        """
         # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
@@ -386,6 +476,9 @@ class Preprocess:
 
 
 class DKTDataset(torch.utils.data.Dataset):
+    """Dataset class
+    This class converts data into Datasets
+    """
     def __init__(self, data, args):
         self.data = data
         self.args = args
@@ -420,6 +513,9 @@ class DKTDataset(torch.utils.data.Dataset):
 
 
 def collate(batch):
+    """Collate function
+    This function pads the batch to equalize the length of each batch.
+    """
     col_n = len(batch[0])
     col_list = [[] for _ in range(col_n)]
     max_seq_len = len(batch[0][-1])
