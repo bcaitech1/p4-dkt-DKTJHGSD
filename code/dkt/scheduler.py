@@ -6,7 +6,7 @@ import torch
 
 def call_scheduler(optimizer, args):
     if args.scheduler == 'plateau':
-        scheduler = ReduceLROnPlateau(optimizer, patience=2, factor=args.scheduler_gamma, mode='max', verbose=True)
+        scheduler = ReduceLROnPlateau(optimizer, patience=1, factor=args.scheduler_gamma, mode='max', verbose=True)
     elif args.scheduler == 'linear':
         scheduler = get_linear_schedule_with_warmup(optimizer,
                                                     num_warmup_steps=args.one_step * args.warmup_epoch,
@@ -31,7 +31,7 @@ def call_scheduler(optimizer, args):
 
 
         
-class CosineAnnealingWarmupRestarts(_LRScheduler): # junho
+class CosineAnnealingWarmupRestarts(_LRScheduler):
     """
         optimizer (Optimizer): Wrapped optimizer.
         first_cycle_steps (int): First cycle step size.

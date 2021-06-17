@@ -12,7 +12,7 @@ hyperparameter_defaults = dict(
     batch_size=64,
     learning_rate=0.001,
     weight_decay=0.01
-)  # chanhyeong, sweep config 껍데기
+)  # sweep config 껍데기
 
 
 def main(args):
@@ -20,7 +20,7 @@ def main(args):
     name = '(' + args.model + ')' + ' ' + get_timestamp()
     preprocess = Preprocess(args)
 
-    if args.mode == 'train' or args.mode == 'pretrain':  # junho
+    if args.mode == 'train' or args.mode == 'pretrain': 
         wandb.login()
         preprocess.load_train_data(args.file_name)
         train_data, cate_embeddings = preprocess.get_train_data()
@@ -34,22 +34,22 @@ def main(args):
                 accu_auc += auc
                 if auc > best_auc:
                     best_auc, best_fold = auc, cnt
-                cnt += 1
-            print(f'Average AUC : {round(accu_auc / args.kfold, 2)}')
-            print(f'Best_fold / AUC : {best_fold} / {best_auc}')
+                cnt += 1 
+            print(f'Average AUC : {round(accu_auc/args.kfold,2)}')
+            print(f'Best_fold : {best_fold} | Best AUC : {best_auc}')
         else:
             train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)
-            if args.sweep:  # chanhyeong
+            if args.sweep:  
                 wandb.init(project="sweep", config=hyperparameter_defaults)
                 sweep_cfg = wandb.config
                 args.batch_size = sweep_cfg.batch_size
                 args.lr = sweep_cfg.learning_rate
                 args.weight_decay = sweep_cfg.weight_decay
             else:
-                wandb.init(project='dkt', config=vars(args), name=name)
-            run(args, train_data=train_data, valid_data=valid_data, cate_embeddings=cate_embeddings)
-
-        # shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제
+                wandb.init(project='dkt', config=vars(args), name = name)
+            run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings)
+        
+        #shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 
 
     elif args.mode == 'inference':  # junho
         preprocess.load_test_data(args.test_file_name)

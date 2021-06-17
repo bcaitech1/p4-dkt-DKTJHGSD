@@ -62,6 +62,7 @@ def process_by_userid(x, grouped, args):
 
     gp['duration'] = gp['time'].apply(
         lambda x: x if x >= 0 else gp['time'][(gp['time'] <= 4 * 60) & (gp['time'] >= 0)].mean())
+    gp['lag_time'] = gp['duration'].shift(1, fill_value = 0)
     gp['character'] = gp['time'].apply(get_character)
 
     # 문제 푼 수(전체, 태그별, 시험지별), 이동평균(전체, 태그별, 시험지별)  # 중첩 + window 포함
@@ -120,23 +121,6 @@ def kfold_useall_data(train, val, args):
 
         data_2 = sum(parmap.map(partial(use_all, max_seq_len=args.max_seq_len, slide=args.slide_window),
                                 val, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-    else:
-        data_1_1 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
-                       train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-        data_2_1 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
-                       val, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-        data_1_2 = sum(parmap.map(partial(use_all, max_seq_len=args.max_seq_len, slide=args.slide_window),
-                                  train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-        data_2_2 = sum(parmap.map(partial(use_all, max_seq_len=args.max_seq_len, slide=args.slide_window),
-                                  val, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-        data_1 = data_1_1 + data_1_2
-        data_2 = data_2_1 + data_2_2
 
     return data_1, data_2
 
@@ -155,9 +139,6 @@ def generate_mean_std_sum(df, x):
     df_sum = df[x].apply(lambda x: x_sum[x])
 
     return df_mean, df_std, df_sum
-
-
-
 
 def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
     seq_len = len(dt[0])
@@ -192,7 +173,6 @@ def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
         else:
             new.append(tuple(np.array(j) for j in tmp[:-1, :]))
     return new
-
 
 def make_max_min_idx(x, group):
     df = group.get_group(x).reset_index(drop=True)
@@ -257,25 +237,6 @@ class Preprocess:
 
             data_2 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
                                     data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-        else:
-            data_1_1 = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
-                        args=self.args),
-                data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-            data_2_1 = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
-                        args=self.args),
-                data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-            data_1_2 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
-                                      data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-            data_2_2 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
-                                      data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
-
-            data_1 = data_1_1 + data_1_2
-            data_2 = data_2_1 + data_2_2
 
         return data_1, data_2
 
@@ -342,7 +303,6 @@ class Preprocess:
         return df
 
     def load_data_from_file(self, file_name, is_train=True):
-
         processed_file_name_dict = {
             'pretrain': 'riiid_df.csv',
             'train': 'merged_df.csv',
@@ -364,7 +324,7 @@ class Preprocess:
                 df_test = df_test.loc[df_test.answerCode != -1]
                 df = pd.concat([df_train, df_test])
             else:
-                df = pd.read_csv(csv_file_path, parse_dates=['Timestamp'])  # , nrows=100000)
+                df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) 
 
             df = self.__feature_engineering(df)
             df = self.__preprocessing(df, is_train)

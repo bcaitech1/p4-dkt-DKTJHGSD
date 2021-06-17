@@ -15,8 +15,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
 
         # only when using warmup scheduler
         args.total_steps = math.ceil(len(train_loader.dataset) / args.batch_size) * (args.n_epochs)
-        args.one_step = math.ceil(len(train_loader.dataset) / args.batch_size)  # junho
-        # args.warmup_steps = args.total_steps // 10
+        args.one_step = math.ceil(len(train_loader.dataset) / args.batch_size) 
 
         model = get_model(args, cate_embeddings)
 
@@ -33,7 +32,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
             early_stopping_counter = 0
         for epoch in range(args.n_epochs):
             ### TRAIN
-            trainer = Trainer(args, model, epoch + 1, optimizer, scheduler, train_loader, valid_loader)  # junho
+            trainer = Trainer(args, model, epoch + 1, optimizer, scheduler, train_loader, valid_loader)
             train_auc, train_acc, train_loss = trainer.train()
 
             ### VALID
@@ -44,11 +43,8 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
             print(
                 f'\tValid Loss: {eval_loss:.3f} | Valid Acc: {round(eval_acc * 100, 2)}% | Valid AUC: {round(eval_auc * 100, 2)}%')
 
-            if args.kfold:
-                wandb.log({f"k{fold}_train_loss": train_loss, f"k{fold}_train_auc": train_auc,
-                           f"k{fold}_train_acc": train_acc,
-                           f"k{fold}_valid_loss": eval_loss, f"k{fold}_valid_auc": eval_auc,
-                           f"k{fold}_valid_acc": eval_acc})
+            if args.kfold: 
+                wandb.log({f"k{fold}_valid_auc":eval_auc})
             else:
                 wandb.log({"train_loss": train_loss, "train_auc": train_auc, "train_acc": train_acc,
                            "valid_loss": eval_loss, "valid_auc": eval_auc, "valid_acc": eval_acc})
@@ -61,7 +57,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
                     os.makedirs(args.model_dir)
                 if args.kfold:
                     torch.save(model_to_save.state_dict(),
-                               os.path.join(args.model_dir, f'{args.save_name}_{fold}.pt'))  # chanhyeong
+                               os.path.join(args.model_dir, f'{args.save_name}_{fold}.pt')) 
                 else:
                     torch.save(model_to_save.state_dict(), os.path.join(args.model_dir, f'{args.save_name}.pt'))
                 print('\tbetter model found, saving!')
@@ -84,7 +80,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
         if args.kfold:
             model = load_model(args, f'{args.save_name}_{fold}.pt', cate_embeddings)
         else:
-            model = load_model(args, f'{args.save_name}.pt', cate_embeddings)  # chanhyeong
-        inference = Trainer(args, model, test_dataset=test_loader, fold=fold)  # junho
+            model = load_model(args, f'{args.save_name}.pt', cate_embeddings) 
+        inference = Trainer(args, model, test_dataset=test_loader, fold=fold)
         inference.inference()
         print('=' * 50 + ' Inference finished ' + '=' * 50)
