@@ -999,7 +999,7 @@ class Saint(nn.Module):
             self.each_cont_idx.append(
                 [self.each_cont_idx[i - 1][1], self.each_cont_idx[i - 1][1] + self.num_each_cont[i]])
 
-        ### Embedding
+        ## ENCODER ##
         # ENCODER embedding
         self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim // self.hd_div)
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim // self.hd_div)
@@ -1020,7 +1020,7 @@ class Saint(nn.Module):
                                                            nn.LayerNorm(self.hidden_dim // self.hd_div)) for i in
                                              self.num_each_cont])
 
-        # DECODER
+        ## DECODER ##
         # decoder combination projection
         self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim) #interaction + cate_
 
@@ -1112,7 +1112,7 @@ class Saint(nn.Module):
         embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
                       idx, embed in enumerate(self.embedding_cont)]
 
-        # ENCODER
+        ## ENCODER ##
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
@@ -1126,7 +1126,7 @@ class Saint(nn.Module):
         embed_enc = self.enc_comb_proj(embed_enc)
 
 
-        # DECODER
+        ## DECODER ##
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
@@ -1172,6 +1172,73 @@ class Saint(nn.Module):
         return preds
 
 
+class LastNQuery(LastQuery):
+    def __init__(self, args, cate_embeddings):
+        super(LastNQuery, self).__init__()
+
+        self.query_agg = nn.Conv1d(in_channels=self.args.max_seq_len, out_channels=1, kernel_size=1)
+
+    def forward(self, input):
+        mask, interaction, _ = input[-3], input[-2], input[-1]
+        cont_feats = input[:len(sum(self.args.continuous_feats, []))]
+        cate_feats = input[len(sum(self.args.continuous_feats, [])): -3]
+        batch_size = interaction.size(0)
+
+        # 범주형 Embedding
+        embed_interaction = self.embedding_interaction(interaction)
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
+
+        # 연속형 Embedding
+        cont_feats = [i.unsqueeze(2) for i in cont_feats]
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
+                      idx, embed in enumerate(self.embedding_cont)]
+
+        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+
+        if self.args.mode == 'pretrain':
+            embed = self.comb_proj_pre(embed)
+        else:
+            embed = self.comb_proj(embed)
+
+        ####################### ENCODER #####################
+
+        q = self.query_agg(self.query(embed)).permute(1, 0, 2)
+        k = self.key(embed).permute(1, 0, 2)
+        v = self.value(embed).permute(1, 0, 2)
+
+        ## attention
+        # last query only
+        out, _ = self.attn(q, k, v, key_padding_mask=mask.squeeze())
+
+        ## residual + layer norm
+        out = out.permute(1, 0, 2)
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln1(out)
+
+        ## feed forward network
+        out = self.ffn(out)
+
+        ## residual + layer norm
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln2(out)
+
+        ###################### LSTM #####################
+        hidden = self.init_hidden(batch_size)
+        out, hidden = self.lstm(out)  # , hidden)
+
+        ###################### DNN #####################
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.args.bidirectional else 1))
+        out = self.fc(out)
+
+        preds = self.activation(out).view(batch_size, -1)
+
+        return preds
+
+
 
 def get_model(args, cate_embeddings): # junho
     """
@@ -1184,6 +1251,7 @@ def get_model(args, cate_embeddings): # junho
     elif args.model == 'lastquery': model= LastQuery(args, cate_embeddings) # seoyoon
     elif args.model == 'saint' : model = Saint(args, cate_embeddings) #sojoung
     elif args.model == 'saktlstm': model=SAKTLSTM(args,cate_embeddings) #chanhyeong
+    elif args.model == 'lastnquery' : model = LastNQuery(args, cate_embeddings)
     return model
 
 
