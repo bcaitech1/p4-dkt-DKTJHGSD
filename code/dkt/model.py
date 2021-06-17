@@ -973,6 +973,7 @@ class SAKTLSTM(nn.Module): #chanhyeong
 
         return preds
 
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=1000):
         super(PositionalEncoding, self).__init__()
@@ -994,18 +995,12 @@ class PositionalEncoding(nn.Module):
 
 
 class Saint(nn.Module):
-
     def __init__(self, args, cate_embeddings):
         super(Saint, self).__init__()
         self.args = args
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
         self.hidden_dim = self.args.hidden_dim
         self.dropout = self.args.drop_out
-        #self.dropout = 0.
-
-        ##added parameters
         self.hd_div = args.hd_divider
         self.num_feats = 1 + len(cate_embeddings) + len(self.args.continuous_feats)
         self.num_each_cont = [len(i) for i in self.args.continuous_feats]
@@ -1015,7 +1010,7 @@ class Saint(nn.Module):
             self.each_cont_idx.append(
                 [self.each_cont_idx[i - 1][1], self.each_cont_idx[i - 1][1] + self.num_each_cont[i]])
 
-        ### Embedding
+        ## ENCODER ##
         # ENCODER embedding
         self.embedding_test = nn.Embedding(self.args.n_test + 1, self.hidden_dim // self.hd_div)
         self.embedding_question = nn.Embedding(self.args.n_questions + 1, self.hidden_dim // self.hd_div)
@@ -1023,27 +1018,22 @@ class Saint(nn.Module):
 
         # encoder combination projection
         self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+2), self.hidden_dim)
-        #self.enc_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * self.num_feats , self.hidden_dim)
 
-        # DECODER embedding
-        # interaction은 현재 correct으로 구성되어있다. correct(1, 2) + padding(0)
-
-        ## 범주형 Embedding
-        #self.embedding_interaction = nn.Embedding(3, self.hidden_dim // 3)
+        # categorical Embedding
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim // self.hd_div,
                                                   padding_idx=0)  # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
         self.embedding_cate = nn.ModuleList(
             [nn.Embedding(cate_embeddings[i] + 1, self.hidden_dim // self.hd_div, padding_idx=0) for i in
              cate_embeddings])
 
-        # 연속형 Embedding
+        # continuous Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim // self.hd_div),
                                                            nn.LayerNorm(self.hidden_dim // self.hd_div)) for i in
                                              self.num_each_cont])
 
+        ## DECODER ##
         # decoder combination projection
-        #self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * 4, self.hidden_dim)
-        self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim)
+        self.dec_comb_proj = nn.Linear((self.hidden_dim // self.hd_div) * (self.num_feats+3), self.hidden_dim) #interaction + cate_
 
         # Positional encoding
         self.pos_encoder = PositionalEncoding(self.hidden_dim, self.dropout, self.args.max_seq_len)
@@ -1065,17 +1055,60 @@ class Saint(nn.Module):
         self.dec_mask = None
         self.enc_dec_mask = None
 
+        # T-Fixup
+        if self.args.Tfixup:
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        padding_idx = 0
+
+        for name, param in self.named_parameters():
+            if len(param.shape) == 1:# bypass bias parameters
+                continue
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+            elif re.match(r'.*Norm.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
+            elif re.match(r'.*Norm.*', name):
+                continue
+            elif re.match(r'encoder.*dense.*weight$|encoder.*attention.output.*weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2 ** 0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
+
     def get_mask(self, seq_len):
         mask = torch.from_numpy(np.triu(np.ones((seq_len, seq_len)), k=1))
 
         return mask.masked_fill(mask == 1, float('-inf'))
 
     def forward(self, input):
-        # test, question, tag, _, mask, interaction, _ = input
-        question = input[6]
-        test = input[5]
-        tag = input[7]
-        #print(input[5], input[6], input[7])
+        question = input[10]# assessmentItemID
+        test = input[9]# testId
+        tag = input[11]#KnowledgeTag
 
         mask, interaction, _ = input[-3], input[-2], input[-1]
         cont_feats = input[:len(sum(self.args.continuous_feats, []))]
@@ -1090,47 +1123,36 @@ class Saint(nn.Module):
         embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
                       idx, embed in enumerate(self.embedding_cont)]
 
-        # 신나는 embedding
-        # ENCODER
+        ## ENCODER ##
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
 
-
+        # exercise information
         embed_enc = torch.cat([embed_test,
                                embed_question,
                                embed_tag, ]
-                              +embed_cate
-                              +embed_cont, 2)
-
-        #embed_enc = torch.cat([embed_interaction]
-        #                      +embed_cate
-        #                      +embed_cont, 2)
-
+                              + embed_cate
+                              + embed_cont, 2)
         embed_enc = self.enc_comb_proj(embed_enc)
 
-        # DECODER
+
+        ## DECODER ##
         embed_test = self.embedding_test(test)
         embed_question = self.embedding_question(question)
         embed_tag = self.embedding_tag(tag)
 
-
+        # response
         embed_dec = torch.cat([embed_test,
                                embed_question,
                                embed_tag,
                                embed_interaction]
-                              +embed_cate
-                              +embed_cont, 2)
-        #embed_dec = torch.cat([embed_interaction]
-        #                       +embed_cate
-        #                       +embed_cont, 2)
-        #print((self.hidden_dim // self.hd_div) * self.num_feats , embed_dec.shape)
+                              + embed_cate
+                              + embed_cont, 2)
 
         embed_dec = self.dec_comb_proj(embed_dec)
 
         # ATTENTION MASK 생성
-        # encoder하고 decoder의 mask는 가로 세로 길이가 모두 동일하여
-        # 사실 이렇게 3개로 나눌 필요가 없다
         if self.enc_mask is None or self.enc_mask.size(0) != seq_len:
             self.enc_mask = self.get_mask(seq_len).to(self.device)
 
@@ -1161,6 +1183,73 @@ class Saint(nn.Module):
         return preds
 
 
+class LastNQuery(LastQuery):
+    def __init__(self, args, cate_embeddings):
+        super(LastNQuery, self).__init__()
+
+        self.query_agg = nn.Conv1d(in_channels=self.args.max_seq_len, out_channels=1, kernel_size=1)
+
+    def forward(self, input):
+        mask, interaction, _ = input[-3], input[-2], input[-1]
+        cont_feats = input[:len(sum(self.args.continuous_feats, []))]
+        cate_feats = input[len(sum(self.args.continuous_feats, [])): -3]
+        batch_size = interaction.size(0)
+
+        # 범주형 Embedding
+        embed_interaction = self.embedding_interaction(interaction)
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
+
+        # 연속형 Embedding
+        cont_feats = [i.unsqueeze(2) for i in cont_feats]
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
+                      idx, embed in enumerate(self.embedding_cont)]
+
+        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+
+        if self.args.mode == 'pretrain':
+            embed = self.comb_proj_pre(embed)
+        else:
+            embed = self.comb_proj(embed)
+
+        ####################### ENCODER #####################
+
+        q = self.query_agg(self.query(embed)).permute(1, 0, 2)
+        k = self.key(embed).permute(1, 0, 2)
+        v = self.value(embed).permute(1, 0, 2)
+
+        ## attention
+        # last query only
+        out, _ = self.attn(q, k, v, key_padding_mask=mask.squeeze())
+
+        ## residual + layer norm
+        out = out.permute(1, 0, 2)
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln1(out)
+
+        ## feed forward network
+        out = self.ffn(out)
+
+        ## residual + layer norm
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln2(out)
+
+        ###################### LSTM #####################
+        hidden = self.init_hidden(batch_size)
+        out, hidden = self.lstm(out)  # , hidden)
+
+        ###################### DNN #####################
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.args.bidirectional else 1))
+        out = self.fc(out)
+
+        preds = self.activation(out).view(batch_size, -1)
+
+        return preds
+
+
 
 def get_model(args, cate_embeddings): # junho
     """
@@ -1173,6 +1262,7 @@ def get_model(args, cate_embeddings): # junho
     elif args.model == 'lastquery': model= LastQuery(args, cate_embeddings) # seoyoon
     elif args.model == 'saint' : model = Saint(args, cate_embeddings) #sojoung
     elif args.model == 'saktlstm': model=SAKTLSTM(args,cate_embeddings) #chanhyeong
+    elif args.model == 'lastnquery' : model = LastNQuery(args, cate_embeddings)
     return model
 
 
