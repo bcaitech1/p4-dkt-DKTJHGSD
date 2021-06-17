@@ -18,6 +18,13 @@ def convert_time(s):
 
 
 def get_character(x):
+    '''
+        Convert elapse time into categorical range in order to group individuals by the time they spent to solve each problem.
+        Time set range below is an outcome from our Dataset EDA.
+        We believe this range implies each individuals characteristics. 
+        For example, a User who solves a question in less then 23 seconds, either means that he/she guessed the answer or 
+        is simply impatient. 
+    '''
     if x < 0:
         return 'A'
     elif x < 23:
@@ -257,7 +264,7 @@ def make_max_min_idx(x, group):
 
 class Preprocess:
     """
-    This class does feture engineering, preprocessing and load the train data and validation data
+        This class runs feature engineering and preprocessing to load the train and validation data
     """
     def __init__(self, args):
         self.args = args
@@ -331,7 +338,6 @@ class Preprocess:
         Returns: Dataframe
             df: preprocessed Dataframe
         """
-        
         if self.args.mode == 'pretrain':
             self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
@@ -366,9 +372,9 @@ class Preprocess:
 
         return df
 
-    def __feature_engineering(self, df):  # junho
+    def __feature_engineering(self, df): 
         """
-        Feautre engineering by multiprocessing
+        Feauture engineering through multiprocessing
         """
         # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
@@ -471,7 +477,7 @@ class Preprocess:
 
 class DKTDataset(torch.utils.data.Dataset):
     """Dataset class
-    This class make data into Datasets
+    This class converts data into Datasets
     """
     def __init__(self, data, args):
         self.data = data
@@ -508,7 +514,7 @@ class DKTDataset(torch.utils.data.Dataset):
 
 def collate(batch):
     """Collate function
-    This function padding the batch to equalize the length of each batch.
+    This function pads the batch to equalize the length of each batch.
     """
     col_n = len(batch[0])
     col_list = [[] for _ in range(col_n)]

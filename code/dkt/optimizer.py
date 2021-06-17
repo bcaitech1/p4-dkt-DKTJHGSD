@@ -1,6 +1,9 @@
 from torch.optim import Adam, AdamW
 
 def get_optimizer(model, args):
+    '''
+        type of optimizers
+    '''
     if args.optimizer == 'adam':
         optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == 'adamW':

@@ -11,7 +11,15 @@ import copy
 import pandas as pd
 
 
-def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None, fold = None, pseudo_cnt = None, pseudo_mode=None):
+def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None, 
+        fold = None, pseudo_cnt = None, pseudo_mode=None):
+    '''
+        When you think of an engine in a car, it converts energy from the heat of burning gasoline 
+        into mechanical work, which then is applied to the wheels to make the car move.  
+
+        This function basically acts as an engine. It converts the preprocessed data into a loadable dataset type,
+        which then is fed to the trainer class to make predictions or inference. 
+    '''
     if args.mode == 'train' or args.mode == 'pretrain':
         train_loader, valid_loader = get_loaders(args, train_data, valid_data)
 
