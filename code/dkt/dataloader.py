@@ -310,10 +310,28 @@ class Preprocess:
         return data_1, data_2
 
     def __save_labels(self, encoder, name):
+        """Save labels
+        Save labels. These saved labels used for inference.
+        
+        Args:
+            encoder: LabelEncoder
+            name: class name
+        """
         le_path = os.path.join(self.args.asset_dir, name + '_classes.npy')
         np.save(le_path, encoder.classes_)
 
     def __preprocessing(self, df, is_train=True):
+        """Data preprocessing
+        This function processes data(Label Encoding) for use in DL models
+        
+        Args:
+            df: Dataframe
+            is_train: train or inference
+            
+        Returns: Dataframe
+            df: preprocessed Dataframe
+        """
+        
         if self.args.mode == 'pretrain':
             self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
