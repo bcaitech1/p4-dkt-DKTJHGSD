@@ -182,13 +182,21 @@ class Trainer(object):
         interaction_mask[:, 0] = 0
         interaction = (interaction * interaction_mask).to(torch.int64)
         
-        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
-            batch_size, self.args.max_seq_len, self.args.max_seq_len
-        )
+#        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+#            batch_size, self.args.max_seq_len, self.args.max_seq_len
+#        )
         extended_mask = mask.unsqueeze(1)
-        extended_mask = extended_mask# * trg_mask
-        extended_mask = extended_mask.to(dtype=torch.float32)
-        extended_mask = (1.0 - extended_mask) * -10000.0
+        extended_mask = extended_mask # * trg_mask
+
+        if self.args.model == "lastquery":
+            # change mask to bool type
+            extended_mask = (1.0 - extended_mask)
+            extended_mask = extended_mask.to(dtype=torch.bool)
+
+        else:
+            # change mask to float type
+            extended_mask = extended_mask.to(dtype=torch.float32)
+            extended_mask = (1.0 - extended_mask) * -10000.0
 
         for i in range(len(feats)):
             filt = len(sum(self.args.continuous_feats,[]))

@@ -22,6 +22,7 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
         if args.use_pretrained_model:
             model_path = os.path.join(args.model_dir, 'pretrain.pt')
             model.load_state_dict(torch.load(model_path), strict=False)  # 이어서 학습
+            print("===============Pretrained model is loaded.=======================")
         optimizer = get_optimizer(model, args)
         scheduler = call_scheduler(optimizer, args)
 
