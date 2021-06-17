@@ -51,7 +51,39 @@ def main(args):
         
         #shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 
 
-    elif args.mode == 'inference':  # junho
+    elif args.mode =='pseudo_labeling':
+        if args.pseudo_labeling :
+            #train
+            print("="*30 , "Start pseudo labeling", "="*30)
+            print("-"*20, "Start train #1")
+            preprocess.load_train_data(args.file_name, preprocessed_file=False)    
+            train_data, cate_embeddings = preprocess.get_train_data()
+            train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)
+            name = name+'pseudo1'
+            wandb.init(project='dkt', config=vars(args), name = name)
+            run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings, pseudo_cnt=1, pseudo_mode=None)
+            print("-"*20, "End train #1")
+            for i in range(1, args.pseudo_labeling):
+                print("="*30 , "Start pseudo labeling #", i+1, "="*30)
+                
+                #학습된 model로 labeled dataset만들기
+                preprocess.load_test_data(args.test_file_name)
+                test_data, cate_embeddings = preprocess.get_test_data()
+                pseudo_train_data = run(args, test_data = test_data, cate_embeddings = cate_embeddings, pseudo_cnt=i+1, pseudo_mode='labeling')
+                pseudo_train_data.to_csv(f'/opt/ml/input/data/train_dataset/pseudo_labeling.csv', mode='w') # dataframe csv파일로 저장
+                
+                #만들어진 labeled dataset 로 train
+                print("-"*20, "Start train #", i+1)
+                preprocess.load_train_data(f'pseudo_labeling.csv')
+                train_data, cate_embeddings = preprocess.get_train_data()
+                train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)          
+                name = name+'pseudo'+ (i+1) 
+                wandb.init(project='dkt', config=vars(args), name = name)
+                run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings, pseudo_cnt=i+1, pseudo_mode=None)
+                print("-"*20, "End train #", i+1)
+                print("="*30 , "End pseudo labeling #", i+1, "="*30)
+
+    elif args.mode == 'inference':  
         preprocess.load_test_data(args.test_file_name)
         test_data, cate_embeddings = preprocess.get_test_data()
         if args.kfold:

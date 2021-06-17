@@ -7,9 +7,11 @@ from .model import get_model, load_model  # junho
 from .trainer import Trainer
 import wandb
 import math
+import copy
+import pandas as pd
 
 
-def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=None, fold=None):
+def run(args, train_data = None, valid_data = None, test_data = None, cate_embeddings = None, fold = None, pseudo_cnt = None, pseudo_mode=None):
     if args.mode == 'train' or args.mode == 'pretrain':
         train_loader, valid_loader = get_loaders(args, train_data, valid_data)
 
@@ -73,6 +75,40 @@ def run(args, train_data=None, valid_data=None, test_data=None, cate_embeddings=
                 scheduler.step(best_auc)
         print('=' * 50 + f' Training finished, best model found in epoch : {best_epoch} ' + '=' * 50)
         return best_auc
+    
+    elif (args.pseudo_labeling > 0) & (pseudo_mode=='labeling') :
+        _, test_loader = get_loaders(args, None, test_data)
+        model = load_model(args, f'{args.save_name}_pseudo{pseudo_cnt-1}.pt', cate_embeddings)
+        make_label = Trainer(args, model, test_dataset = test_loader) 
+        test_predict = make_label.inference()
+        print('[  test_predict  ] : ', len(test_predict))
+        pseudo_labels=[]
+        for x in test_predict:
+            pseudo_labels.append(1 if x>=0.5 else 0)
+        print('[  pseudo_labels  ] : ', len(pseudo_labels))
+
+        temp_test_data = pd.read_csv('/opt/ml/input/data/train_dataset/pseudo_df_test.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기
+        temp_test_data = temp_test_data.sort_values(by=['userID','Timestamp'], axis=0)
+            
+        # pseudo 라벨이 담길 test 데이터 복사본
+        pseudo_test_data = copy.deepcopy(temp_test_data)
+
+        # pseudo label 테스트 데이터 update
+        for i, pseudo_label in enumerate(pseudo_labels):
+            pseudo_test_data.answerCode[i] = pseudo_label
+
+        pseudo_df_train = pd.read_csv('/opt/ml/input/data/train_dataset/pseudo_df_train.csv', parse_dates=['Timestamp']) # 저장한 dataframe 불러오기
+        pseudo_df_train['pseudo'] = False
+        pseudo_test_data['pseudo'] = True
+        pseudo_train_data = pd.concat([pseudo_df_train, pseudo_test_data])
+        
+        print(pseudo_train_data.head())
+        print(f"train 셋 크기       : {len(pseudo_df_train)}")
+        print(f"test 셋 크기        : {len(pseudo_test_data)}")
+        print("-" * 30)
+        print(f"새로운 train 셋 크기 : {len(pseudo_train_data)}")
+
+        return pseudo_train_data
 
     elif args.mode == 'inference':
         print("Start Inference")

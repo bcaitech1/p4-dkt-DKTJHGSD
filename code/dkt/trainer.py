@@ -139,6 +139,9 @@ class Trainer(object):
                         preds = preds.detach().numpy()
                     total_preds+=list(preds)
 
+                if (self.args.pseudo_labeling>0) & (self.args.mode=='pseudo_labeling') :
+                    return total_preds
+
         if self.args.kfold:
             kfold_output = os.path.join(self.args.output_dir, "kfold_outputs")
             write_path = os.path.join(kfold_output, f"output_{self.fold}.csv")
