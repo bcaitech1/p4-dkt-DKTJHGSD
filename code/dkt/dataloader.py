@@ -39,6 +39,19 @@ def get_character(x):
 
 
 def process_by_userid(x, grouped, args):
+    """Make features by userID
+    week_number: Weeks of the year
+    mday: Day of the week
+    hour: Hour
+    duration: The time to solve a assessmentItemID
+    character: Categorical duration
+    lag_time:
+    tag_solved, testid_solved: Cumulative or Moving # of solved tags, testids
+    tag_avg, testid_avg: Cumulative or Moving average of tags, testids
+    
+    Returns: Data frame
+        Data frame with features added
+    """
     gp = grouped.get_group(int(x))
     gp = gp.sort_values(by=['userID', 'Timestamp'], ascending=True)
 
@@ -99,6 +112,16 @@ def process_by_userid(x, grouped, args):
     return gp
 
 def use_all(dt, max_seq_len, slide):
+    """use all sequences
+    This function split train data by max_seq_len and slide window
+    
+    Args:
+        max_seq_len: length of each train sequences
+        slide: overlap ratio
+        
+    Returns: List
+        List of tuple
+    """
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     new = [tuple([np.array(j) for j in tmp[:, i:i + max_seq_len]]) for i in range(0, seq_len - 8, max_seq_len // slide)]
@@ -106,6 +129,16 @@ def use_all(dt, max_seq_len, slide):
 
 
 def kfold_useall_data(train, val, args):
+    """k-folded use all data
+    use all data by k folded train or validation data
+    
+    Args:
+        train: train data
+        val: validation data
+    Returns: (List, List)
+        data_1: list of train data
+        data_2: list of validation data
+    """
     # 모든 데이터 사용
     if args.by_window_or_by_testid == 'by_testid':
         data_1 = sum(
@@ -126,6 +159,14 @@ def kfold_useall_data(train, val, args):
 
 
 def generate_mean_std_sum(df, x):
+    """Make mean, std features
+    Args:
+        x: testid, difficulty, assessmentitemid, knowledgetag
+    Returns: (Series, Series, Series)
+        df_mean: average of x
+        df_std: std of x
+        df_sum: sum of x
+    """
     x_mean = df.groupby(x)['answerCode'].mean().reset_index()
     x_std = df.groupby(x)['answerCode'].std().reset_index()
     x_sum = df.groupby(x)['answerCode'].sum().reset_index()
@@ -141,6 +182,16 @@ def generate_mean_std_sum(df, x):
     return df_mean, df_std, df_sum
 
 def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
+    """Use all data by testid
+    use all data but don't cut in a middle
+    Args:
+        max_seq_len: split train data under max_seq_len
+        test_cnt: # of testid to use
+        args: args
+        is_train: train or inference
+    Returns: List
+        List of tuple
+    """
     seq_len = len(dt[0])
     tmp = np.stack(dt)
     span = tmp[-1, :].astype(int)
@@ -175,6 +226,15 @@ def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
     return new
 
 def make_max_min_idx(x, group):
+    """Make max and min index by userid
+    Make max and min index by userid to use in use_by_testid function
+    Args:
+        x: userid
+        group: pandas group
+        
+    Returns: Dataframe
+        df: max and min features added Dataframe
+    """
     df = group.get_group(x).reset_index(drop=True)
 
     testid = df.loc[0, 'testId']
@@ -196,6 +256,9 @@ def make_max_min_idx(x, group):
 
 
 class Preprocess:
+    """
+    This class does feture engineering, preprocessing and load the train data and validation data
+    """
     def __init__(self, args):
         self.args = args
         self.train_data = None
@@ -286,6 +349,9 @@ class Preprocess:
         return df
 
     def __feature_engineering(self, df):  # junho
+        """
+        Feautre engineering by multiprocessing
+        """
         # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
@@ -386,6 +452,9 @@ class Preprocess:
 
 
 class DKTDataset(torch.utils.data.Dataset):
+    """Dataset class
+    This class make data into Datasets
+    """
     def __init__(self, data, args):
         self.data = data
         self.args = args
@@ -420,6 +489,9 @@ class DKTDataset(torch.utils.data.Dataset):
 
 
 def collate(batch):
+    """Collate function
+    This function padding the batch to equalize the length of each batch.
+    """
     col_n = len(batch[0])
     col_list = [[] for _ in range(col_n)]
     max_seq_len = len(batch[0][-1])
