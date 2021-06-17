@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 import wandb
 
 import torch.nn as nn
-class Trainer(object): # junho
+class Trainer(object): 
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
         self.epoch = epoch
@@ -35,14 +35,6 @@ class Trainer(object): # junho
                 input = self.__process_batch(batch)
                 preds = self.model(input)
                 targets = input[-1] # correct
-
-                # print('-'*150)
-                # print('original_pred')
-                # print(preds)
-                # print(preds.shape)
-                # print('lana_pred')
-                # print(preds[:,-1])
-                # print(preds[:,-1].shape)
 
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
@@ -95,12 +87,9 @@ class Trainer(object): # junho
             with torch.no_grad():
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
-
                     preds = self.model(input)
                     targets = input[-1] # correct
 
-                    preds = self.model(input)
-                    targets = input[-1] # correct
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -175,12 +164,13 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
         feats = batch[:-2]
-        mask = batch[-1]
-        correct = batch[-2]
+        mask, correct = batch[-1], batch[-2]
         batch_size = mask.size()[0]
+
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다

@@ -31,7 +31,7 @@ def call_scheduler(optimizer, args):
 
 
         
-class CosineAnnealingWarmupRestarts(_LRScheduler): # junho
+class CosineAnnealingWarmupRestarts(_LRScheduler):
     """
         optimizer (Optimizer): Wrapped optimizer.
         first_cycle_steps (int): First cycle step size.
