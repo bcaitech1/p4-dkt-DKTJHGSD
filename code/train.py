@@ -25,11 +25,7 @@ def main(args):
         preprocess.load_train_data(args.file_name)
         train_data, cate_embeddings = preprocess.get_train_data()
         if args.kfold:
-<<<<<<< HEAD
-            wandb.init(project='DKT', config=vars(args), name = name)
-=======
             wandb.init(project='dkt', config=vars(args), name=name)
->>>>>>> c900c12ca22d1daac3d09db909d2ce074f311518
             kf, cnt, accu_auc, best_fold, best_auc = KFold(n_splits=args.kfold), 1, 0, 0, 0
             for train_idx, val_idx in kf.split(train_data):
                 train, valid = train_data[train_idx], train_data[val_idx]
@@ -38,15 +34,9 @@ def main(args):
                 accu_auc += auc
                 if auc > best_auc:
                     best_auc, best_fold = auc, cnt
-<<<<<<< HEAD
                 cnt += 1 
             print(f'Average AUC : {round(accu_auc/args.kfold,2)}')
             print(f'Best_fold : {best_fold} | Best AUC : {best_auc}')
-=======
-                cnt += 1
-            print(f'Average AUC : {round(accu_auc / args.kfold, 2)}')
-            print(f'Best_fold / AUC : {best_fold} / {best_auc}')
->>>>>>> c900c12ca22d1daac3d09db909d2ce074f311518
         else:
             train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)
             if args.sweep:  # chanhyeong
@@ -56,17 +46,10 @@ def main(args):
                 args.lr = sweep_cfg.learning_rate
                 args.weight_decay = sweep_cfg.weight_decay
             else:
-<<<<<<< HEAD
-                wandb.init(project='DKT', config=vars(args), name = name)
+                wandb.init(project='dkt', config=vars(args), name = name)
             run(args, train_data = train_data, valid_data = valid_data, cate_embeddings = cate_embeddings)
         
         #shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제 
-=======
-                wandb.init(project='dkt', config=vars(args), name=name)
-            run(args, train_data=train_data, valid_data=valid_data, cate_embeddings=cate_embeddings)
-
-        # shutil.rmtree('/opt/ml/p4-dkt-DKTJHGSD/code/wandb') # 완드비 폴더 삭제
->>>>>>> c900c12ca22d1daac3d09db909d2ce074f311518
 
     elif args.mode == 'inference':  # junho
         preprocess.load_test_data(args.test_file_name)
