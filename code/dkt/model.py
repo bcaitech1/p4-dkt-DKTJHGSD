@@ -457,8 +457,9 @@ class LastQuery(nn.Module):
         # # 범주형 Embedding
 
         ## pretrained model과 dimension 맞추기 위해서 차원 변경
-        cate_embeddings['testId'] = 61838
-        cate_embeddings['assessmentItemID'] = 4934589
+        if self.args.use_pretrained_model:
+            cate_embeddings['testId'] = 61838
+            cate_embeddings['assessmentItemID'] = 4934589
 
         # # 범주형 Embedding
         self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
@@ -620,17 +621,13 @@ class LastQuery(nn.Module):
 
         ####################### ENCODER #####################
 
-        q = self.query(embed).permute(1, 0, 2)
-
-
         q = self.query(embed)[:, -1:, :].permute(1, 0, 2)
-
         k = self.key(embed).permute(1, 0, 2)
         v = self.value(embed).permute(1, 0, 2)
 
         ## attention
         # last query only
-        out, _ = self.attn(q, k, v)
+        out, _ = self.attn(q, k, v, key_padding_mask=mask.squeeze())
 
         ## residual + layer norm
         out = out.permute(1, 0, 2)
@@ -1190,3 +1187,70 @@ def load_model(args, file_name, cate_embeddings):
    
     print("Loading Model from:", model_path, "...Finished.")
     return model
+
+
+class LastNQuery(LastQuery):
+    def __init__(self, args, cate_embeddings):
+        super(LastNQuery, self).__init__()
+
+        self.query_agg = nn.Conv1d(in_channels=self.args.max_seq_len, out_channels=1, kernel_size=1)
+
+    def forward(self, input):
+        mask, interaction, _ = input[-3], input[-2], input[-1]
+        cont_feats = input[:len(sum(self.args.continuous_feats, []))]
+        cate_feats = input[len(sum(self.args.continuous_feats, [])): -3]
+        batch_size = interaction.size(0)
+
+        # 범주형 Embedding
+        embed_interaction = self.embedding_interaction(interaction)
+        embed_cate = [embed(cate_feats[idx]) for idx, embed in enumerate(self.embedding_cate)]
+
+        # 연속형 Embedding
+        cont_feats = [i.unsqueeze(2) for i in cont_feats]
+        embed_cont = [embed(torch.cat(cont_feats[self.each_cont_idx[idx][0]:self.each_cont_idx[idx][1]], 2)) for
+                      idx, embed in enumerate(self.embedding_cont)]
+
+        embed = torch.cat([embed_interaction] + embed_cate + embed_cont, 2)
+
+        if self.args.mode == 'pretrain':
+            embed = self.comb_proj_pre(embed)
+        else:
+            embed = self.comb_proj(embed)
+
+        ####################### ENCODER #####################
+
+        q = self.query_agg(self.query(embed)).permute(1, 0, 2)
+        k = self.key(embed).permute(1, 0, 2)
+        v = self.value(embed).permute(1, 0, 2)
+
+        ## attention
+        # last query only
+        out, _ = self.attn(q, k, v, key_padding_mask=mask.squeeze())
+
+        ## residual + layer norm
+        out = out.permute(1, 0, 2)
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln1(out)
+
+        ## feed forward network
+        out = self.ffn(out)
+
+        ## residual + layer norm
+        out = embed + out
+
+        if self.args.layer_norm:
+            out = self.ln2(out)
+
+        ###################### LSTM #####################
+        hidden = self.init_hidden(batch_size)
+        out, hidden = self.lstm(out)  # , hidden)
+
+        ###################### DNN #####################
+        out = out.contiguous().view(batch_size, -1, self.hidden_dim * (2 if self.args.bidirectional else 1))
+        out = self.fc(out)
+
+        preds = self.activation(out).view(batch_size, -1)
+
+        return preds

@@ -44,7 +44,7 @@ Temporary Items
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
-
+.idea/misc.xml
 # Generated files
 .idea/**/contentModel.xml
 
@@ -214,6 +214,7 @@ target/
 # IPython
 # pyenv
 .python-version
+.ipynb_checkpoints
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
