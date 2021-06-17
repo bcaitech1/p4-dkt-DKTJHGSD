@@ -4,20 +4,28 @@ from transformers import get_linear_schedule_with_warmup, get_scheduler
 import math
 import torch
 
-
 def call_scheduler(optimizer, args):
+    '''
+        type of schedulers 
+        Plateau (ReduceLROnPlateau): reduce learning rate when a specified metric has stopped improving
+        linear: linearly increate the leraning rate from a low rate to a constant rate thereafter.
+        steplr: Decays the learning rate of each parameter group by gamma every step_size epochs 
+        cosine: cosine function is used as the learning rate annealing functionand every so often, the learning rate is restated
+    '''
     if args.scheduler == 'plateau':
         scheduler = ReduceLROnPlateau(optimizer, patience=1, factor=args.scheduler_gamma, mode='max', verbose=True)
     elif args.scheduler == 'linear':
         scheduler = get_linear_schedule_with_warmup(optimizer,
                                                     num_warmup_steps=args.one_step * args.warmup_epoch,
                                                     num_training_steps=args.total_steps)
+
     elif args.scheduler == 'steplr': 
         scheduler = StepLR(
             optimizer, 
             step_size = args.one_step * args.warmup_epoch, 
             gamma = args.scheduler_gamma
             )
+
     elif args.scheduler == 'cosine' :
         scheduler = CosineAnnealingWarmupRestarts(optimizer,
                     first_cycle_steps = args.one_step//10,
@@ -25,12 +33,12 @@ def call_scheduler(optimizer, args):
                     max_lr=args.lr, min_lr=args.lr * 0.1,
                     warmup_steps=args.one_step * args.warmup_epoch,
                     gamma=1.0)
-
+                    
     return scheduler
 
 
         
-class CosineAnnealingWarmupRestarts(_LRScheduler): # junho
+class CosineAnnealingWarmupRestarts(_LRScheduler):
     """
         optimizer (Optimizer): Wrapped optimizer.
         first_cycle_steps (int): First cycle step size.

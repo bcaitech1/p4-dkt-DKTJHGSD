@@ -3,21 +3,33 @@ import torch
 import numpy as np
 from tqdm.auto import tqdm
 
-from .dataloader import get_loaders
 from .criterion import get_criterion
 from .metric import get_metric
 from sklearn.metrics import accuracy_score
 
 import wandb
 
-class Trainer(object): # junho
-    def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None):
+import torch.nn as nn
+class Trainer(object): 
+    '''
+        args (arguments): consists of training hyperparameters
+        epoch (int): Number of training epochs
+        optimizer (Optimizer): type of optimizer
+        scheduler: type of scheduler
+        train_dataset: consists of user sequence datas
+        test_dataset: evaluation dataset when the mode is either train or pretrain, else test dataset
+        fold: # of fold that is being trained during kfold cross_validation
+        model: The model used to train or inference
+        device: GPU if GPU is available, else CPU
+    '''
+    def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
         self.epoch = epoch
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
+        self.fold = fold
         self.model = model
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -25,7 +37,6 @@ class Trainer(object): # junho
 
     def train(self):
         self.model.train()
-
         total_preds = []
         total_targets = []
         global_step, epoch_loss = 0, 0
@@ -33,10 +44,8 @@ class Trainer(object): # junho
             for step, batch in enumerate(train_bar):
                 input = self.__process_batch(batch)
                 preds = self.model(input)
-                # targets = input[3] # correct
-                targets = batch[3]
-                targets = targets.type(torch.FloatTensor)
-                targets = targets.to(self.args.device)
+                targets = input[-1] # correct
+
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -47,9 +56,6 @@ class Trainer(object): # junho
                     self.optimizer.zero_grad()
                     if self.args.scheduler != 'plateau':
                         self.scheduler.step()  # Update learning rate schedule
-
-                # if step % args.log_steps == 0:
-                #     print(f"Training steps: {step} Loss: {str(loss.item())}")
 
                 # predictions
                 preds = preds[:,-1]
@@ -82,10 +88,8 @@ class Trainer(object): # junho
 
         return auc, acc, loss_avg
 
-
     def validate(self):
         self.model.eval()
-
         total_preds = []
         total_targets = []
         eval_loss = 0
@@ -94,10 +98,8 @@ class Trainer(object): # junho
                 for step, batch in enumerate(eval_bar):
                     input = self.__process_batch(batch)
                     preds = self.model(input)
-                    # targets = input[3] # correct
-                    targets = batch[3]
-                    targets = targets.type(torch.FloatTensor)
-                    targets = targets.to(self.args.device)
+                    targets = input[-1] # correct
+
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -114,7 +116,7 @@ class Trainer(object): # junho
                     total_preds.append(preds)
                     total_targets.append(targets)
 
-                    # 전체 손실 값 계산
+        #             # 전체 손실 값 계산
                     eval_loss += loss.item()
 
                     # update progress bar
@@ -148,25 +150,40 @@ class Trainer(object): # junho
                         preds = preds.detach().numpy()
                     total_preds+=list(preds)
 
-        write_path = os.path.join(self.args.output_dir, "output.csv")
-        if not os.path.exists(self.args.output_dir):
-            os.makedirs(self.args.output_dir)
-        with open(write_path, 'w', encoding='utf8') as w:
-            print("writing prediction : {}".format(write_path))
-            w.write("id,prediction\n")
-            for id, p in enumerate(total_preds):
-                w.write('{},{}\n'.format(id,p))
+                if (self.args.pseudo_labeling>0) & (self.args.mode=='pseudo_labeling') :
+                    return total_preds
+
+        if self.args.kfold:
+            kfold_output = os.path.join(self.args.output_dir, "kfold_outputs")
+            write_path = os.path.join(kfold_output, f"output_{self.fold}.csv")
+            if not os.path.exists(kfold_output):
+                os.makedirs(kfold_output)
+            with open(write_path, 'w', encoding='utf8') as w:
+                print(f"prediction fold : {self.fold}")
+                w.write("id,prediction\n")
+                for id, p in enumerate(total_preds):
+                    w.write('{},{}\n'.format(id,p))
+        else:
+            write_path = os.path.join(self.args.output_dir, "output.csv")
+            if not os.path.exists(self.args.output_dir):
+                os.makedirs(self.args.output_dir)
+            with open(write_path, 'w', encoding='utf8') as w:
+                print("writing prediction: {}".format(write_path))
+                w.write("id,prediction\n")
+                for id, p in enumerate(total_preds):
+                    w.write('{},{}\n'.format(id,p))
 
 
     # 배치 전처리
     def __process_batch(self, batch):
+        feats = batch[:-2]
+        mask, correct = batch[-1], batch[-2]
+        batch_size = mask.size()[0]
 
-        test, question, tag, correct, duration, difficulty, mask = batch
-        #test, question, tag, correct, duration, mask = batch
-        
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
@@ -174,39 +191,43 @@ class Trainer(object): # junho
         # 1을 틀림, 2를 맞음 으로 바꿔주는 작업. 아래 test, question, tag 같은 작업을 위해 모두 1을 더한다.
         interaction = correct + 1
         interaction = interaction.roll(shifts=1, dims=1)
-        interaction[:, 0] = 0 # set padding index to the first sequence
-        interaction = (interaction * mask).to(torch.int64)
+        interaction_mask = mask.roll(shifts=1, dims=1)
+        interaction_mask[:, 0] = 0
+        interaction = (interaction * interaction_mask).to(torch.int64)
+        
+#        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+#            batch_size, self.args.max_seq_len, self.args.max_seq_len
+#        )
+        extended_mask = mask.unsqueeze(1)
+        extended_mask = extended_mask # * trg_mask
 
-        test = ((test + 1) * mask).to(torch.int64)
-        question = ((question + 1) * mask).to(torch.int64)
-        tag = ((tag + 1) * mask).to(torch.int64)
-        duration = ((duration + 1) * mask).to(torch.int64)
-        difficulty = ((difficulty + 1) * mask).to(torch.int64)
+        if self.args.model == "lastquery":
+            # change mask to bool type
+            extended_mask = (1.0 - extended_mask)
+            extended_mask = extended_mask.to(dtype=torch.bool)
+
+        else:
+            # change mask to float type
+            extended_mask = extended_mask.to(dtype=torch.float32)
+            extended_mask = (1.0 - extended_mask) * -10000.0
+
+        for i in range(len(feats)):
+            filt = len(sum(self.args.continuous_feats,[]))
+            if i >= filt:
+                feats[i] = ((feats[i] + 1) * mask).to(torch.int64)
 
         # device memory로 이동
-        test = test.to(self.device)
-        question = question.to(self.device)
-
-        tag = tag.to(self.device)
-        #    correct = correct.to(args.device)
-        correct_adj = correct + 1
-        correct_adj = correct_adj.to(self.args.device)
-        mask = mask.to(self.device)
+        for i in range(len(feats)):
+            feats[i] = feats[i].to(self.device)
 
         interaction = interaction.to(self.device)
-        duration = duration.to(self.device)
-        difficulty = difficulty.to(self.device)
+        correct = correct.to(self.device)
+        mask = extended_mask.to(self.device)
 
-        return (test, question,
-                tag, correct_adj, mask,
-                interaction, duration, difficulty)
-
-        # return (test, question,
-        #         tag, correct, mask,
-        #         interaction, duration)
+        return feats + [mask, interaction, correct]
 
 
-    # loss계산하고 parameter update!
+    # loss 계산하고 parameter update!
     def __compute_loss(self, preds, targets):
         """
         Args :
