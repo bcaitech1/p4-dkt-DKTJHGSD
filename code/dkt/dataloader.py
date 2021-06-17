@@ -201,6 +201,8 @@ class Preprocess:
         self.train_data = None
         self.test_data = None
         self.cate_embeddings = None
+        self.pseudo_data = None
+
 
     def get_train_data(self):
         return self.train_data, self.cate_embeddings
@@ -217,8 +219,12 @@ class Preprocess:
             random.shuffle(data)
 
         size = int(len(data) * ratio)
-        data_1 = data[:size]
-        data_2 = data[size:]
+        if self.args.pseudo_labeling:
+            data_1 = np.concatenate((data[:size], self.pseudo_data), axis=0)
+            data_2 = data[size:]
+        else:
+            data_1 = data[:size]
+            data_2 = data[size:]
 
         # 모든 데이터 사용
         if self.args.by_window_or_by_testid == 'by_testid':
@@ -306,7 +312,8 @@ class Preprocess:
         processed_file_name_dict = {
             'pretrain': 'riiid_df.csv',
             'train': 'merged_df.csv',
-            'inference': 'test_df.csv'
+            'pseudo_labeling' : 'pseudo_labeling.csv',
+            'inference': 'test_df.csv',
         }
 
         save_file_path = os.path.join(self.args.output_dir, processed_file_name_dict[self.args.mode])
@@ -323,6 +330,8 @@ class Preprocess:
                 df_test = pd.read_csv(os.path.join(self.args.data_dir, 'test_data.csv'))
                 df_test = df_test.loc[df_test.answerCode != -1]
                 df = pd.concat([df_train, df_test])
+            elif self.args.mode == 'pseudo_labeling':
+                df = pd.read_csv(csv_file_path)
             else:
                 df = pd.read_csv(csv_file_path, parse_dates=['Timestamp']) 
 
@@ -341,6 +350,8 @@ class Preprocess:
             self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
             self.args.asset_dir = 'test_asset/'
+        elif self.args.mode == 'pseudo_labeling':
+            self.args.asset_dir = 'pseudo_asset/'
 
         for cate_name in self.args.categorical_feats:
             cate_embeddings[cate_name] = len(np.load(os.path.join(self.args.asset_dir, cate_name + '_classes.npy')))
@@ -352,7 +363,13 @@ class Preprocess:
         else:
             val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
 
-        group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
+        if (self.args.pseudo_labeling > 0) & (is_train==True):
+            pseudo_data_df = df[df.pseudo==True]
+            nopseudo_data_df = df[df.pseudo==False]
+            group = nopseudo_data_df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
+            self.pseudo_data = pseudo_data_df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
+        else:
+            group = df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
 
         return group.values, cate_embeddings
 

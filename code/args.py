@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument('--testid_cnt', default=3, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
     parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
+    parser.add_argument('--pseudo_labeling', default=4, type=int, help='# times to replace answer w/ pseudo labeling')
+
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+',
@@ -66,7 +68,7 @@ def parse_args():
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
                         help='scheduler type : plateau, steplr, cosine, linear')
-    parser.add_argument('--mode', default='train', type=str, help='pretrain, train or inference')
+    parser.add_argument('--mode', default='train', type=str, help='pretrain, train, pseudo_labeling or inference')
     parser.add_argument('--use_pretrained_model', default=False, type=bool,
                         help='if True, use pretrained model when training a model')
     parser.add_argument('--reprocess_data', default=True, type=bool,
