@@ -3,7 +3,6 @@ import torch
 import numpy as np
 from tqdm.auto import tqdm
 
-from .dataloader import get_loaders
 from .criterion import get_criterion
 from .metric import get_metric
 from sklearn.metrics import accuracy_score

@@ -12,7 +12,7 @@ hyperparameter_defaults = dict(
     batch_size=64,
     learning_rate=0.001,
     weight_decay=0.01
-)  # chanhyeong, sweep config 껍데기
+)  # sweep config 껍데기
 
 
 def main(args):
@@ -20,7 +20,7 @@ def main(args):
     name = '(' + args.model + ')' + ' ' + get_timestamp()
     preprocess = Preprocess(args)
 
-    if args.mode == 'train' or args.mode == 'pretrain':  # junho
+    if args.mode == 'train' or args.mode == 'pretrain': 
         wandb.login()
         preprocess.load_train_data(args.file_name)
         train_data, cate_embeddings = preprocess.get_train_data()
@@ -39,7 +39,7 @@ def main(args):
             print(f'Best_fold : {best_fold} | Best AUC : {best_auc}')
         else:
             train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)
-            if args.sweep:  # chanhyeong
+            if args.sweep:  
                 wandb.init(project="sweep", config=hyperparameter_defaults)
                 sweep_cfg = wandb.config
                 args.batch_size = sweep_cfg.batch_size
