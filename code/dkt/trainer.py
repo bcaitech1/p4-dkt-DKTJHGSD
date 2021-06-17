@@ -3,15 +3,25 @@ import torch
 import numpy as np
 from tqdm.auto import tqdm
 
-from .dataloader import get_loaders
 from .criterion import get_criterion
 from .metric import get_metric
 from sklearn.metrics import accuracy_score
 
 import wandb
 
-
-class Trainer(object): # junho
+import torch.nn as nn
+class Trainer(object): 
+    '''
+        args (arguments): consists of training hyperparameters
+        epoch (int): Number of training epochs
+        optimizer (Optimizer): type of optimizer
+        scheduler: type of scheduler
+        train_dataset: consists of user sequence datas
+        test_dataset: evaluation dataset when the mode is either train or pretrain, else test dataset
+        fold: # of fold that is being trained during kfold cross_validation
+        model: The model used to train or inference
+        device: GPU if GPU is available, else CPU
+    '''
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
         self.epoch = epoch
@@ -27,7 +37,6 @@ class Trainer(object): # junho
 
     def train(self):
         self.model.train()
-
         total_preds = []
         total_targets = []
         global_step, epoch_loss = 0, 0
@@ -36,6 +45,7 @@ class Trainer(object): # junho
                 input = self.__process_batch(batch)
                 preds = self.model(input)
                 targets = input[-1] # correct
+
                 loss = self.__compute_loss(preds, targets)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.clip_grad)
@@ -46,9 +56,6 @@ class Trainer(object): # junho
                     self.optimizer.zero_grad()
                     if self.args.scheduler != 'plateau':
                         self.scheduler.step()  # Update learning rate schedule
-
-                # if step % args.log_steps == 0:
-                #     print(f"Training steps: {step} Loss: {str(loss.item())}")
 
                 # predictions
                 preds = preds[:,-1]
@@ -81,7 +88,6 @@ class Trainer(object): # junho
 
         return auc, acc, loss_avg
 
-
     def validate(self):
         self.model.eval()
         total_preds = []
@@ -93,6 +99,7 @@ class Trainer(object): # junho
                     input = self.__process_batch(batch)
                     preds = self.model(input)
                     targets = input[-1] # correct
+
                     loss = self.__compute_loss(preds, targets)
                     # predictions
                     preds = preds[:,-1]
@@ -109,7 +116,7 @@ class Trainer(object): # junho
                     total_preds.append(preds)
                     total_targets.append(targets)
 
-                    # 전체 손실 값 계산
+        #             # 전체 손실 값 계산
                     eval_loss += loss.item()
 
                     # update progress bar
@@ -143,6 +150,9 @@ class Trainer(object): # junho
                         preds = preds.detach().numpy()
                     total_preds+=list(preds)
 
+                if (self.args.pseudo_labeling>0) & (self.args.mode=='pseudo_labeling') :
+                    return total_preds
+
         if self.args.kfold:
             kfold_output = os.path.join(self.args.output_dir, "kfold_outputs")
             write_path = os.path.join(kfold_output, f"output_{self.fold}.csv")
@@ -158,7 +168,7 @@ class Trainer(object): # junho
             if not os.path.exists(self.args.output_dir):
                 os.makedirs(self.args.output_dir)
             with open(write_path, 'w', encoding='utf8') as w:
-                print("writing prediction : {}".format(write_path))
+                print("writing prediction: {}".format(write_path))
                 w.write("id,prediction\n")
                 for id, p in enumerate(total_preds):
                     w.write('{},{}\n'.format(id,p))
@@ -167,12 +177,13 @@ class Trainer(object): # junho
     # 배치 전처리
     def __process_batch(self, batch):
         feats = batch[:-2]
-        mask = batch[-1]
-        correct = batch[-2]
+        mask, correct = batch[-1], batch[-2]
         batch_size = mask.size()[0]
+
         # change to float
         mask = mask.type(torch.FloatTensor)
         correct = correct.type(torch.FloatTensor)
+        #frequency = frequency.type(torch.FloatTensor)
 
         #  interaction을 임시적으로 correct를 한칸 우측으로 이동한 것으로 사용
         #    saint의 경우 decoder에 들어가는 input이다
@@ -184,13 +195,21 @@ class Trainer(object): # junho
         interaction_mask[:, 0] = 0
         interaction = (interaction * interaction_mask).to(torch.int64)
         
-        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
-            batch_size, self.args.max_seq_len, self.args.max_seq_len
-        )
+#        trg_mask = torch.tril(torch.ones((self.args.max_seq_len, self.args.max_seq_len))).expand(
+#            batch_size, self.args.max_seq_len, self.args.max_seq_len
+#        )
         extended_mask = mask.unsqueeze(1)
-        extended_mask = extended_mask# * trg_mask
-        extended_mask = extended_mask.to(dtype=torch.float32)
-        extended_mask = (1.0 - extended_mask) * -10000.0
+        extended_mask = extended_mask # * trg_mask
+
+        if self.args.model == "lastquery":
+            # change mask to bool type
+            extended_mask = (1.0 - extended_mask)
+            extended_mask = extended_mask.to(dtype=torch.bool)
+
+        else:
+            # change mask to float type
+            extended_mask = extended_mask.to(dtype=torch.float32)
+            extended_mask = (1.0 - extended_mask) * -10000.0
 
         for i in range(len(feats)):
             filt = len(sum(self.args.continuous_feats,[]))
