@@ -11,6 +11,17 @@ import wandb
 
 import torch.nn as nn
 class Trainer(object): 
+    '''
+        args (arguments): consists of training hyperparameters
+        epoch (int): Number of training epochs
+        optimizer (Optimizer): type of optimizer
+        scheduler: type of scheduler
+        train_dataset: consists of user sequence datas
+        test_dataset: evaluation dataset when the mode is either train or pretrain, else test dataset
+        fold: # of fold that is being trained during kfold cross_validation
+        model: The model used to train or inference
+        device: GPU if GPU is available, else CPU
+    '''
     def __init__(self, args, model, epoch=None, optimizer=None, scheduler=None, train_dataset=None, test_dataset=None, fold = None):
         self.args = args
         self.epoch = epoch
