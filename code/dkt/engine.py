@@ -4,7 +4,6 @@ from .dataloader import get_loaders
 from .optimizer import get_optimizer
 from .scheduler import call_scheduler
 from .model import get_model, load_model # junho
-#from .trainer12 import Trainer
 from .trainer import Trainer
 import wandb
 import math

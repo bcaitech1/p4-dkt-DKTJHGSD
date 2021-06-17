@@ -26,8 +26,9 @@ class LSTM(nn.Module):
             self.each_cont_idx.append([self.each_cont_idx[i-1][1], self.each_cont_idx[i-1][1] + self.num_each_cont[i]])
 
         # # 범주형 Embedding 
-        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0) # interaction은 현재 correct로 구성되어있다. correct(1, 2) + padding(0)
-        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) for i in cate_embeddings])
+        self.embedding_interaction = nn.Embedding(3, self.hidden_dim//self.hd_div, padding_idx=0)
+        self.embedding_cate = nn.ModuleList([nn.Embedding(cate_embeddings[i]+1, self.hidden_dim//self.hd_div, padding_idx = 0) 
+                                                for i in cate_embeddings])
 
         # 연속형 Embedding
         self.embedding_cont = nn.ModuleList([nn.Sequential(nn.Linear(i, self.hidden_dim//self.hd_div), 

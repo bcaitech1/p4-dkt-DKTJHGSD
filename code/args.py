@@ -5,7 +5,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--seed', default=42, type=int, help='seed')
+    parser.add_argument('--seed', default=71, type=int, help='seed')
     #parser.add_argument('--device', default='cpu', type=str, help='cpu or gpu')
 
     parser.add_argument('--data_dir', default='/opt/ml/input/data/train_dataset', type=str, help='data directory')
@@ -21,35 +21,37 @@ def parse_args():
     parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
-    parser.add_argument('--hidden_dim', default=512, type=int, help = 'hidden dimension size')
-    parser.add_argument('--hd_divider', default=16, type=int, help = 'hidden dimension divider')
+    parser.add_argument('--hidden_dim', default=300, type=int, help = 'hidden dimension size')
+    parser.add_argument('--hd_divider', default=15, type=int, help = 'hidden dimension divider')
     parser.add_argument('--n_layers', default=2, type=int, help = 'number of layers')
-    parser.add_argument('--n_heads', default=8, type=int, help = 'number of heads')
+    parser.add_argument('--n_heads', default=2, type=int, help = 'number of heads')
     parser.add_argument('--drop_out', default=0.1, type=float, help = 'drop out rate')
     parser.add_argument('--bidirectional', default=True, type=bool, help = 'bi or uni directional')
     
     # 훈련
     parser.add_argument('--split_ratio', default=0.9, type=int, help='train val split ratio') # junho
-    parser.add_argument('--kfold', default=3, type=int, help='utilize kfold') # junho
-    parser.add_argument('--n_epochs', default=20, type=int, help='number of epochs')
+    parser.add_argument('--kfold', default=0, type=int, help='utilize kfold') # junho
+    parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight_decay',default=1e-3,type=float,help='weight decay') #changhyeong
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
-    parser.add_argument('--patience', default=4, type=int, help='for early stopping')
+    parser.add_argument('--patience', default=6, type=int, help='for early stopping')
     parser.add_argument('--scheduler_gamma', default=0.5, type=float, help='lr decrease rate')
     parser.add_argument('--warmup_epoch', default=2, type=float)
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') # junho
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq') # junho
-    parser.add_argument('--slide_window', default=3, type=int) # junho
+    parser.add_argument('--slide_window', default=20, type=int) # junho
     parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method or both')
-    parser.add_argument('--testid_cnt', default=0, type=int, help='minimum testid_cnt, 0 choose by length') # 3
+    parser.add_argument('--testid_cnt', default=3, type=int, help='minimum testid_cnt, 0 choose by length') # 3
 
     # feature
     parser.add_argument('--continuous_feats', type=list, nargs='+', 
-            default=[['duration'], ['lag_time'], ['difficulty_mean', 'difficulty_std'], ['assId_mean'], ['testId_mean', 'testId_std'], ['tag_mean', 'tag_std']], 
-            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean, difficulty_std, assId_mean, assId_std, \
-                    tag_mean, tag_std, testId_mean, testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
+            default=[['duration'], ['lag_time'], ['difficulty_mean', 'difficulty_std'], \
+                    ['assId_mean'], ['testId_mean', 'testId_std'], ['tag_mean', 'tag_std']], 
+            help = 'duration, tag_solved, tag_avg, testid_solved, testid_avg, difficulty_mean,\
+                    difficulty_std, assId_mean, assId_std, tag_mean, tag_std, testId_mean, \
+                    testId_std, acc_tag_solved, acc_tag_avg, acc_testid_solved, acc_testid_avg, \
                     win_tag_solved, win_tag_avg, win_testid_solved, win_testid_avg')
 
     parser.add_argument('--categorical_feats', type=list, nargs='+', 
@@ -57,7 +59,7 @@ def parse_args():
             help = 'testId, assessmentItemID, KnowledgeTag, character, difficulty, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='lana', type=str, help='model type')
+    parser.add_argument('--model', default='lstm', type=str, help='model type')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str, help='scheduler type') # [plateau, steplr, cosine, linear]
     parser.add_argument('--mode', default='train', type=str, help='train or inference') # junho
