@@ -22,12 +22,17 @@
 ## Overview <a name = "overview"></a>
 - Background: 초등학교, 중학교, 고등학교, 대학교와 같은 교육기관에서 우리는 시험을 늘 봐왔습니다. 시험 성적이 높은 과목은 우리가 잘 아는 것을 나타내고 시험 성적이 낮은 과목은 반대로 공부가 더욱 필요함을 나타냅니다. 시험은 우리가 얼마만큼 아는지 평가하는 한 방법입니다.
 
+
 <p align="center"><img src="https://user-images.githubusercontent.com/45220862/122505366-2ce64800-d037-11eb-8204-b1c516710043.png" width="400"></
 
+    
 - Why DKT?: 하지만 시험에는 한계가 있습니다. 우리가 수학 시험에서 점수를 80점 받았다면 우리는 80점을 받은 학생일 뿐입니다. 우리가 돈을 들여 과외를 받지 않는 이상 우리는 우리 개개인에 맞춤화된 피드백을 받기가 어렵고 따라서 무엇을 해야 성적을 올릴 수 있을지 판단하기 어렵습니다. 이럴 때 사용할 수 있는 것이 DKT (Deep Knowledge Tracing) 입니다!
 
 
+
 <p align="center"><img src="https://user-images.githubusercontent.com/45220862/122505288-00cac700-d037-11eb-9de8-48af59a5f6ab.png" width="600"></p>
+
+
 
 - Goal: 주어진 학생들의 문제 풀이 이력을 기반으로, 풀지 않은 새로운 문제가 특정 학생에게 주어질 때 정답을 맞출 수 있을지 없을 지를 추론할 수 있는 binary classifier 모델을 만듭니다.
 
@@ -41,7 +46,7 @@
 - 총 6명
 
 ## Our Works<a name = "ourworks"></a>
-<p align="center"><img src="https://user-images.githubusercontent.com/45220862/122505265-f4466e80-d036-11eb-8ff4-c13c8b6a179e.png" width="600"></p>
+<p align="center"><img src="https://user-images.githubusercontent.com/45220862/122514677-44c5c800-d047-11eb-85b8-46b8ca1ba52b.png" width="600"></p>
 
 - 우리 팀은 성능 개선을 위한 윈도우 슬라이딩 기반 data augmentation, 정확한 예측을 도울 수 있는 feature engineering을 통한 학습 파이프라인을 구축했습니다.
 - Sequence data, DKT task에 적합하다고 판단되는 여러 모델들을 research, 구현하여 학습했고 앙상블을 통해 shake-up을 예방하면서 score를 올리려 노력했습니다.
