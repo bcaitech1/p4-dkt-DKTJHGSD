@@ -63,15 +63,15 @@ def parse_args():
                         help='testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='lastquery', type=str, 
-                        help='model type: lstm, lstmattn, bert, convbert, lastquery, saint, saktlstm, lana')
+    parser.add_argument('--model', default='lastnquery', type=str,
+                        help='model type: lstm, lstmattn, bert, convbert, lastquery, lastnquery, saint, saktlstm, lana')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
                         help='scheduler type : plateau, steplr, cosine, linear')
     parser.add_argument('--mode', default='train', type=str, help='pretrain, train, pseudo_labeling or inference')
     parser.add_argument('--use_pretrained_model', default=False, type=bool,
                         help='if True, use pretrained model when training a model')
-    parser.add_argument('--reprocess_data', default=True, type=bool,
+    parser.add_argument('--reprocess_data', default=False, type=bool,
                         help='if True, reprocess data using feature engineering and preprocessing')
     parser.add_argument('--sweep', default=False, type=bool, help='if True, sweep mode')
     parser.add_argument('--save_name', default="default", type=str, help='save name')
