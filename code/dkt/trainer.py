@@ -201,7 +201,7 @@ class Trainer(object):
         extended_mask = mask.unsqueeze(1)
         extended_mask = extended_mask # * trg_mask
 
-        if self.args.model == "lastquery":
+        if self.args.model == "lastquery" or self.args.model == "lastnquery":
             # change mask to bool type
             extended_mask = (1.0 - extended_mask)
             extended_mask = extended_mask.to(dtype=torch.bool)

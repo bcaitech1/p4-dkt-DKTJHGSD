@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') 
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq')
     parser.add_argument('--slide_window', default=20, type=int) 
-    parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method or both')
+    parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method')
     parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
     parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
@@ -71,7 +71,7 @@ def parse_args():
     parser.add_argument('--mode', default='train', type=str, help='pretrain, train, pseudo_labeling or inference')
     parser.add_argument('--use_pretrained_model', default=False, type=bool,
                         help='if True, use pretrained model when training a model')
-    parser.add_argument('--reprocess_data', default=True, type=bool,
+    parser.add_argument('--reprocess_data', default=False, type=bool,
                         help='if True, reprocess data using feature engineering and preprocessing')
     parser.add_argument('--sweep', default=False, type=bool, help='if True, sweep mode')
     parser.add_argument('--save_name', default="default", type=str, help='save name')

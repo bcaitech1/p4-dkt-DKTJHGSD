@@ -1195,7 +1195,7 @@ class PositionalEncoding(nn.Module):
 ###############################################################################################
 class LastNQuery(LastQuery):
     def __init__(self, args, cate_embeddings):
-        super(LastNQuery, self).__init__()
+        super(LastNQuery, self).__init__(args, cate_embeddings)
 
         self.query_agg = nn.Conv1d(in_channels=self.args.max_seq_len, out_channels=1, kernel_size=1)
 
