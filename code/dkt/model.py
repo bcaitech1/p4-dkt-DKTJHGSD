@@ -295,6 +295,49 @@ class Bert(nn.Module):
         self.fc = nn.Linear(self.args.hidden_dim, 1)
 
         self.activation = nn.Sigmoid()
+        
+        # T-Fixup
+        if self.args.Tfixup:
+
+            # 초기화 (Initialization)
+            self.tfixup_initialization()
+            print("T-Fixup Initialization Done")
+
+            # 스케일링 (Scaling)
+            self.tfixup_scaling()
+            print(f"T-Fixup Scaling Done")
+
+    def tfixup_initialization(self):
+        # 우리는 padding idx의 경우 모두 0으로 통일한다
+        padding_idx = 0
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
+                nn.init.constant_(param[padding_idx], 0)
+            elif re.match(r'.*ln.*|.*bn.*', name):
+                continue
+            elif re.match(r'.*weight*', name):
+                # nn.init.xavier_uniform_(param)
+                nn.init.xavier_normal_(param)
+
+    def tfixup_scaling(self):
+        temp_state_dict = {}
+
+        # 특정 layer들의 값을 스케일링한다
+        for name, param in self.named_parameters():
+            if re.match(r'^embedding*', name):
+                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
+            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
+            elif re.match(r"encoder.*value.weight$", name):
+                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
+
+        # 나머지 layer는 원래 값 그대로 넣는다
+        for name in self.state_dict():
+            if name not in temp_state_dict:
+                temp_state_dict[name] = self.state_dict()[name]
+
+        self.load_state_dict(temp_state_dict)
 
     def forward(self, input):
         mask, interaction, _ = input[-3], input[-2], input[-1]
@@ -386,7 +429,6 @@ class ConvBert(nn.Module):
         self.conv2fc = nn.Linear(self.args.hidden_dim*3,self.args.hidden_dim)
         self.fc = nn.Linear(self.args.hidden_dim, 1)
         self.activation = nn.Sigmoid()
-
 
     def forward(self, input):        
         mask, interaction, _ = input[-3], input[-2], input[-1]

@@ -4,7 +4,7 @@ import random
 from collections import defaultdict
 from datetime import datetime
 from functools import partial
-from tqdm import tqdm, trange
+
 import numpy as np
 import pandas as pd
 import parmap
@@ -296,18 +296,20 @@ class Preprocess:
 
         # 모든 데이터 사용
         if self.args.by_window_or_by_testid == 'by_testid':
-            for i in trange(len(data_1)):
-                data_1[i] = use_by_testid(data_1[i], self.args.max_seq_len, self.args.testid_cnt, self.args, is_train=True)
-            for i in trange(len(data_2)):
-                data_2[i] = use_by_testid(data_2[i], self.args.max_seq_len, self.args.testid_cnt, self.args, is_train=True)
+            data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
+                        args=self.args), data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+
+            data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
+                        args=self.args), data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
         
         elif self.args.by_window_or_by_testid == 'by_window':
-            for i in trange(len(data_1)):
-                data_1[i] = use_all(data_1[i], self.args.max_seq_len, self.args.slide_window)
-            for i in trange(len(data_2)):
-                data_2[i] = use_all(data_2[i], self.args.max_seq_len, self.args.slide_window)
+            data_1 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
+                                    data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), []) # multiprocessing.cpu_count()
 
-        return sum(data_1,[]), sum(data_2,[])
+            data_2 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
+                                    data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+
+        return data_1, data_2
 
     def __save_labels(self, encoder, name):
         """Save labels
@@ -342,10 +344,9 @@ class Preprocess:
         if self.args.by_window_or_by_testid == 'by_testid' and self.args.mode != 'pretrain':
             df['max_index'] = 0
             df['min_index'] = 0
-            all_df = sorted(list(df['userID'].unique()))
-            for i in trange(len(all_df)):
-                all_df[i] = make_max_min_idx(all_df[i], df.groupby('userID'))
-            df = pd.concat(all_df)
+            df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
+                            pm_processes=multiprocessing.cpu_count())
+            df = pd.concat(df)
 
         for col in self.args.categorical_feats:
             le = LabelEncoder()
@@ -373,9 +374,8 @@ class Preprocess:
         # 유져별로 feature engineering
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
-        for i in trange(len(final_df)):
-            final_df[i] = process_by_userid(final_df[i], grouped, self.args)
-        
+        final_df = parmap.map(partial(process_by_userid, grouped=grouped, args=self.args),
+                              final_df, pm_pbar=True, pm_processes=multiprocessing.cpu_count()) # multiprocessing.cpu_count()
         df = pd.concat(final_df)
 
         # difficulty mean, std
@@ -468,11 +468,9 @@ class Preprocess:
     def load_test_data(self, file_name):
         self.test_data, self.cate_embeddings = self.load_data_from_file(file_name, is_train=False)
         if self.args.by_window_or_by_testid == 'by_testid':
-            
-            self.test_data = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt, is_train=False,
-                        args=self.args),
-                self.test_data, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+            self.test_data = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, 
+                                test_cnt=self.args.testid_cnt, is_train=False, args=self.args),
+                                self.test_data, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
 
 
 class DKTDataset(torch.utils.data.Dataset):

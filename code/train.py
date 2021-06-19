@@ -7,6 +7,7 @@ from dkt.engine import run
 from dkt.utils import setSeeds, get_timestamp, kfold_ensemble
 import wandb
 from sklearn.model_selection import KFold
+import time
 
 hyperparameter_defaults = dict(
     batch_size=64,
@@ -22,6 +23,7 @@ def main(args):
 
     if args.mode == 'train' or args.mode == 'pretrain': 
         wandb.login()
+        start_time = time.time() # 시작 시간 기록
         preprocess.load_train_data(args.file_name)
         train_data, cate_embeddings = preprocess.get_train_data()
         if args.kfold:
@@ -39,6 +41,14 @@ def main(args):
             print(f'Best_fold : {best_fold} | Best AUC : {best_auc}')
         else:
             train_data, valid_data = preprocess.split_data(train_data, ratio=args.split_ratio, seed=args.seed)
+            
+            end_time = time.time() # 종료 시간 기록
+            elapsed_time = end_time - start_time
+            elapsed_mins = int(elapsed_time / 60)
+            elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+            print(f'Sliding window : {args.slide_window}')
+            print(f'Time Spent on data preprocessing : {elapsed_mins} minutes {elapsed_secs} seconds')
+            
             if args.sweep:  
                 wandb.init(project="sweep", config=hyperparameter_defaults)
                 sweep_cfg = wandb.config
