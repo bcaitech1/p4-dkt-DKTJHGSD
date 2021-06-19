@@ -148,13 +148,12 @@ def kfold_useall_data(train, val, args):
     """
     # 모든 데이터 사용
     if args.by_window_or_by_testid == 'by_testid':
-        data_1 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+        data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
                        train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
 
-        data_2 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+        data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
                        val, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+                       
     elif args.by_window_or_by_testid == 'by_window':
         data_1 = sum(parmap.map(partial(use_all, max_seq_len=args.max_seq_len, slide=args.slide_window),
                                 train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
