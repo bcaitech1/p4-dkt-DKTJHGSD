@@ -1,4 +1,4 @@
-Riiid 데이터에서 `train.csv` 와 `questions.csv` 파일 사용해서 데이터 구축했습니다. 밑에서 편의상 train 밑의 column들은 `train.XX` 와 같은 형식으로 설명하겠습니다.
+Riiid 데이터에서 `train.csv` 와 `questions.csv` 파일을 사용해서 우리 데이터와 유사한 파일을 구축했습니다. 데이터 구축 방식은 다음과 같습니다.
 
 - `userID`:  `train.user_id` 사용
 - `assessmentItemID`: 'A' + `questions.part` + 0으로 padding된 `train.task_container_id`  + `questions.question_id` (우리 데이터와 비슷하게 10자리로 맞췄습니다.)
