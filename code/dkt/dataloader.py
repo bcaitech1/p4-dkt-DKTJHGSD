@@ -148,13 +148,12 @@ def kfold_useall_data(train, val, args):
     """
     # 모든 데이터 사용
     if args.by_window_or_by_testid == 'by_testid':
-        data_1 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+        data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
                        train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
 
-        data_2 = sum(
-            parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
+        data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len=args.max_seq_len, test_cnt=args.testid_cnt, args=args),
                        val, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+                       
     elif args.by_window_or_by_testid == 'by_window':
         data_1 = sum(parmap.map(partial(use_all, max_seq_len=args.max_seq_len, slide=args.slide_window),
                                 train, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
@@ -222,8 +221,6 @@ def use_by_testid(dt, max_seq_len, test_cnt, args, is_train=True):
             s = span[s]
 
         for s, e in spans:
-            if args.by_window_or_by_testid == 'both' and e - s == max_seq_len:
-                continue
             new.append(tuple(np.array(j) for j in tmp[:-1, s:e]))
     else:
         if len(span) > max_seq_len:
@@ -289,7 +286,7 @@ class Preprocess:
             random.shuffle(data)
 
         size = int(len(data) * ratio)
-        if self.args.pseudo_labeling:
+        if self.args.mode == 'pseudo_labeling':
             data_1 = np.concatenate((data[:size], self.pseudo_data), axis=0)
             data_2 = data[size:]
         else:
@@ -298,18 +295,15 @@ class Preprocess:
 
         # 모든 데이터 사용
         if self.args.by_window_or_by_testid == 'by_testid':
-            data_1 = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
-                        args=self.args),
-                data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+            data_1 = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
+                        args=self.args), data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
 
-            data_2 = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
-                        args=self.args),
-                data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+            data_2 = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt,
+                        args=self.args), data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+        
         elif self.args.by_window_or_by_testid == 'by_window':
             data_1 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
-                                    data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+                                    data_1, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), []) # multiprocessing.cpu_count()
 
             data_2 = sum(parmap.map(partial(use_all, max_seq_len=self.args.max_seq_len, slide=self.args.slide_window),
                                     data_2, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
@@ -346,7 +340,7 @@ class Preprocess:
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
 
-        if self.args.mode != 'pretrain':
+        if self.args.by_window_or_by_testid == 'by_testid' and self.args.mode != 'pretrain':
             df['max_index'] = 0
             df['min_index'] = 0
             df = parmap.map(partial(make_max_min_idx, group=df.groupby('userID')), df['userID'].unique(), pm_pbar=True,
@@ -380,7 +374,7 @@ class Preprocess:
         grouped = df.groupby(df.userID)
         final_df = sorted(list(df['userID'].unique()))
         final_df = parmap.map(partial(process_by_userid, grouped=grouped, args=self.args),
-                              final_df, pm_pbar=True, pm_processes=multiprocessing.cpu_count())
+                              final_df, pm_pbar=True, pm_processes=multiprocessing.cpu_count()) # multiprocessing.cpu_count()
         df = pd.concat(final_df)
 
         # difficulty mean, std
@@ -430,7 +424,10 @@ class Preprocess:
 
             if self.args.mode == 'pretrain':
                 df = df.fillna({'duration': df['duration'].mean(), 'assId_std': 0, 'testId_std': 0})
-
+            
+            if not os.path.exists(self.args.output_dir):
+                os.makedirs(self.args.output_dir)
+            
             df.to_csv(save_file_path, mode='w')  # dataframe csv파일로 저장
 
 
@@ -453,7 +450,8 @@ class Preprocess:
         else:
             val = sum(self.args.continuous_feats, []) + self.args.categorical_feats + ['answerCode']
 
-        if (self.args.pseudo_labeling > 0) & (is_train==True):
+
+        if self.args.mode=='pseudo_labeling' and (self.args.pseudo_labeling > 0) & (is_train==True):
             pseudo_data_df = df[df.pseudo==True]
             nopseudo_data_df = df[df.pseudo==False]
             group = nopseudo_data_df[columns].groupby('userID').apply(lambda r: tuple(r[i].values for i in val))
@@ -469,10 +467,9 @@ class Preprocess:
     def load_test_data(self, file_name):
         self.test_data, self.cate_embeddings = self.load_data_from_file(file_name, is_train=False)
         if self.args.by_window_or_by_testid == 'by_testid':
-            self.test_data = sum(parmap.map(
-                partial(use_by_testid, max_seq_len=self.args.max_seq_len, test_cnt=self.args.testid_cnt, is_train=False,
-                        args=self.args),
-                self.test_data, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
+            self.test_data = sum(parmap.map(partial(use_by_testid, max_seq_len=self.args.max_seq_len, 
+                                test_cnt=self.args.testid_cnt, is_train=False, args=self.args),
+                                self.test_data, pm_pbar=True, pm_processes=multiprocessing.cpu_count()), [])
 
 
 class DKTDataset(torch.utils.data.Dataset):

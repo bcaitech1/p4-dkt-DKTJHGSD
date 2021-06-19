@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
 
     parser.add_argument('--max_seq_len', default=30, type=int, help='max sequence length')
-    parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
+    parser.add_argument('--num_workers', default=2, type=int, help='number of workers')
 
     # 모델
     parser.add_argument('--hidden_dim', default=300, type=int, help='hidden dimension size')
@@ -41,8 +41,8 @@ def parse_args():
     parser.add_argument('--gradient_accumulation_steps', default=1, type=float, help = 'accumulating gradient') 
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq')
     parser.add_argument('--slide_window', default=20, type=int) 
-    parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method or both')
-    parser.add_argument('--testid_cnt', default=3, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method')
+    parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
     parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
     parser.add_argument('--pseudo_labeling', default=4, type=int, help='# times to replace answer w/ pseudo labeling')
@@ -63,8 +63,8 @@ def parse_args():
                         help='testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='lastnquery', type=str,
-                        help='model type: lstm, lstmattn, bert, convbert, lastquery, lastnquery, saint, saktlstm, lana')
+    parser.add_argument('--model', default='convbert', type=str, 
+                        help='model type: lstm, lstmattn, bert, convbert, lastquery, saint, saktlstm, lana')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
                         help='scheduler type : plateau, steplr, cosine, linear')
