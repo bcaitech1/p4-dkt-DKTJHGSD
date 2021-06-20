@@ -151,21 +151,13 @@ $ python ./train.py --model [MODEL_NAME] [...params...] --mode inference
 - [project](https://github.com/bcaitech1/p4-dkt-DKTJHGSD/projects)탭에서 세부적인 task들을 확인할 수 있습니다.
 
 ## Reference<a name = "ref"></a>
-*Youngduck Choi et al., Towards an
-Appropriate Query, Key, and Value Computation for Knowledge Tracing. 2020.*
+*Y.D. Choi et al., "Towards an
+Appropriate Query, Key, and Value Computation for Knowledge Tracing", 2020.*
 
-*Yuhao Zhou et al., LANA: Towards Personalized Deep Knolwedge Tracing. 2021.*
+*Y. Zhou et al., "LANA: Towards Personalized Deep Knolwedge Tracing", 2021.*
 
-@misc{Charles2013,
-  author = {Charles, P.W.D.},
-  title = {Project Title},
-  year = {2013},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/charlespwd/project-title}},
-  commit = {4f57d6a0e4c030202a07a60bc1bb1ed1544bf679}
-}
-*update 예정*
+*Oya T., Morishima S., "LSTM-SAKT: LSTM-Encoded SAKT-like Transformer for Knowledge Tracing", 2021.*
 
+*S.K. Jeon, "Last Query Transformer RNN for knowledge tracing", 2021*
 
 ###### tags: `DKT` `Boostcamp` `드크트즐흐크슾드` `2nd solution`
