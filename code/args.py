@@ -63,7 +63,7 @@ def parse_args():
                         help='testId, assessmentItemID, KnowledgeTag, character, week_number, mday, hour')
 
     ## 중요 ##
-    parser.add_argument('--model', default='convbert', type=str, 
+    parser.add_argument('--model', default='lstmattn', type=str, 
                         help='model type: lstm, lstmattn, bert, convbert, lastquery, saint, saktlstm, lana')
     parser.add_argument('--optimizer', default='adamW', type=str, help='optimizer type')
     parser.add_argument('--scheduler', default='plateau', type=str,
