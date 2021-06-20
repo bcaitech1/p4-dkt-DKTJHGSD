@@ -318,6 +318,9 @@ class Preprocess:
             encoder: LabelEncoder
             name: class name
         """
+        if not os.path.exists(self.args.asset_dir):
+                os.makedirs(self.args.asset_dir)
+
         le_path = os.path.join(self.args.asset_dir, name + '_classes.npy')
         np.save(le_path, encoder.classes_)
 
@@ -336,6 +339,8 @@ class Preprocess:
             self.args.asset_dir = 'pretrain_asset/'
         elif self.args.mode == 'inference':
             self.args.asset_dir = 'test_asset/'
+        elif self.args.mode == 'pseudo_labeling':
+            self.args.asset_dir = 'pseudo_labeling/'
 
         if not os.path.exists(self.args.asset_dir):
             os.makedirs(self.args.asset_dir)
@@ -349,15 +354,15 @@ class Preprocess:
 
         for col in self.args.categorical_feats:
             le = LabelEncoder()
-            if self.args.reprocess_data:
+            if self.args.mode == 'inference':
+                label_path = os.path.join(self.args.asset_dir, col + '_classes.npy')
+                le.classes_ = np.load(label_path)
+                df[col] = df[col].apply(lambda x: str(x) if str(x) in le.classes_ else 'unknown')
+            else:
                 # For UNKNOWN class
                 a = df[col].unique().tolist() + ['unknown']
                 le.fit(a)
                 self.__save_labels(le, col)
-            else:
-                label_path = os.path.join(self.args.asset_dir, col + '_classes.npy')
-                le.classes_ = np.load(label_path)
-                df[col] = df[col].apply(lambda x: str(x) if str(x) in le.classes_ else 'unknown')
 
             # 모든 컬럼이 범주형이라고 가정
             df[col] = df[col].astype(str)

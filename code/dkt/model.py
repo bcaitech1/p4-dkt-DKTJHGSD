@@ -156,49 +156,6 @@ class LSTMATTN(nn.Module):
 
         self.activation = nn.Sigmoid()
 
-        # T-Fixup
-        if self.args.Tfixup:
-
-            # 초기화 (Initialization)
-            self.tfixup_initialization()
-            print("T-Fixup Initialization Done")
-
-            # 스케일링 (Scaling)
-            self.tfixup_scaling()
-            print(f"T-Fixup Scaling Done")
-
-    def tfixup_initialization(self):
-        # 우리는 padding idx의 경우 모두 0으로 통일한다
-        padding_idx = 0
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
-                nn.init.constant_(param[padding_idx], 0)
-            elif re.match(r'.*ln.*|.*bn.*', name):
-                continue
-            elif re.match(r'.*weight*', name):
-                # nn.init.xavier_uniform_(param)
-                nn.init.xavier_normal_(param)
-
-    def tfixup_scaling(self):
-        temp_state_dict = {}
-
-        # 특정 layer들의 값을 스케일링한다
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
-            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
-            elif re.match(r"encoder.*value.weight$", name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
-
-        # 나머지 layer는 원래 값 그대로 넣는다
-        for name in self.state_dict():
-            if name not in temp_state_dict:
-                temp_state_dict[name] = self.state_dict()[name]
-
-        self.load_state_dict(temp_state_dict)
-
     def init_hidden(self, batch_size):
         h = torch.zeros(
             self.n_layers,
@@ -295,49 +252,6 @@ class Bert(nn.Module):
         self.fc = nn.Linear(self.args.hidden_dim, 1)
 
         self.activation = nn.Sigmoid()
-        
-        # T-Fixup
-        if self.args.Tfixup:
-
-            # 초기화 (Initialization)
-            self.tfixup_initialization()
-            print("T-Fixup Initialization Done")
-
-            # 스케일링 (Scaling)
-            self.tfixup_scaling()
-            print(f"T-Fixup Scaling Done")
-
-    def tfixup_initialization(self):
-        # 우리는 padding idx의 경우 모두 0으로 통일한다
-        padding_idx = 0
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
-                nn.init.constant_(param[padding_idx], 0)
-            elif re.match(r'.*ln.*|.*bn.*', name):
-                continue
-            elif re.match(r'.*weight*', name):
-                # nn.init.xavier_uniform_(param)
-                nn.init.xavier_normal_(param)
-
-    def tfixup_scaling(self):
-        temp_state_dict = {}
-
-        # 특정 layer들의 값을 스케일링한다
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
-            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
-            elif re.match(r"encoder.*value.weight$", name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
-
-        # 나머지 layer는 원래 값 그대로 넣는다
-        for name in self.state_dict():
-            if name not in temp_state_dict:
-                temp_state_dict[name] = self.state_dict()[name]
-
-        self.load_state_dict(temp_state_dict)
 
     def forward(self, input):
         mask, interaction, _ = input[-3], input[-2], input[-1]
@@ -537,49 +451,6 @@ class LastQuery(nn.Module):
         # Fully connected layer
         self.fc = nn.Linear(self.hidden_dim * (2 if self.args.bidirectional else 1), 1)
         self.activation = nn.Sigmoid()
-
-        if self.args.Tfixup:
-            # 초기화 (Initialization)
-            self.tfixup_initialization()
-            print("T-Fixup Initialization Done")
-
-            # 스케일링 (Scaling)
-            self.tfixup_scaling()
-            print(f"T-Fixup Scaling Done")
-
-    def tfixup_initialization(self):
-        # 우리는 padding idx의 경우 모두 0으로 통일한다
-        padding_idx = 0
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                nn.init.normal_(param, mean=0, std=param.shape[1] ** -0.5)
-                nn.init.constant_(param[padding_idx], 0)
-                print('name2 : ', name)
-            elif re.match(r'.*ln.*|.*bn.*', name):
-                continue
-            elif re.match(r'.*weight*', name):
-                # nn.init.xavier_uniform_(param)
-                nn.init.xavier_normal_(param)
-
-
-    def tfixup_scaling(self):
-        temp_state_dict = {}
-
-        # 특정 layer들의 값을 스케일링한다
-        for name, param in self.named_parameters():
-            if re.match(r'^embedding*', name):
-                temp_state_dict[name] = (9 * self.args.n_layers) ** (-1 / 4) * param
-            elif re.match(r'encoder.*ffn.*weight$|encoder.*attn.out_proj.weight$', name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * param
-            elif re.match(r"encoder.*value.weight$", name):
-                temp_state_dict[name] = (0.67 * (self.args.n_layers) ** (-1 / 4)) * (param * (2**0.5))
-
-        # 나머지 layer는 원래 값 그대로 넣는다
-        for name in self.state_dict():
-            if name not in temp_state_dict:
-                temp_state_dict[name] = self.state_dict()[name]
-
-        self.load_state_dict(temp_state_dict)
 
     def mask_2d_to_3d(self, mask, batch_size, seq_len):
         # padding 부분에 1을 주기 위해 0과 1을 뒤집는다
@@ -897,45 +768,6 @@ class SAKTLSTM(nn.Module):
         new_memory_features = self.norm4(self.linear8(self.dropout_layer(self.MLP_activ(self.linear7(new_memory)))))
 
         head_mask = [None] * self.n_heads
-
-
-###### nn.multihead attention 으로 인코딩 레이어 구현하기
-#         new_query_features=new_query_features.transpose(0,1)
-#         new_memory_features=new_memory_features.transpose(0,1)
-
-
-#         #print(padding_mask,padding_mask.shape)
-#         # 내가 할일은, 여기서 -10000 -> 0, -0은 0으로.
-
-#         # our mask consists of -10000. , -0. --> respecitvely, former is padded idx, latter is non-padded
-#         #attention_triu_mask=torch.from_numpy(np.triu(np.ones((self.args.max_seq_len, self.args.max_seq_len)), k=1))
-#         #attention_triu_mask=attention_triu_mask.masked_fill(attention_triu_mask == 1, float('-inf')).to(self.device)
-#         #print(padding_mask,padding_mask.shape)
-#         #print(attention_triu_mask,attention_triu_mask.shape)
-#         encoded_output1=self.mhattn(new_query_features,
-#                                     new_memory_features,
-#                                     new_memory_features,
-#                                     #attn_mask=attention_triu_mask,
-#                                     key_padding_mask=mask)[0]
-#         src = new_query_features+self.dropout_layer(encoded_output1)
-#         src = self.norm(src)
-#         src2 = self.mhattn_linear2(self.dropout_layer(self.MLP_activ(self.mhattn_linear1(src))))
-#         src = src+self.dropout_layer(src2)
-#         src = self.norm(src)
-#         encoded_output2=self.mhattn(src,
-#                                     new_memory_features,
-#                                     new_memory_features,
-#                                     #attn_mask=attention_triu_mask,
-#                                     key_padding_mask=mask)[0]
-#         src = new_query_features+self.dropout_layer(encoded_output2)
-#         src = self.norm(src)
-#         src2 = self.mhattn_linear2(self.dropout_layer(self.MLP_activ(self.mhattn_linear1(src))))
-#         src = src+self.dropout_layer(src2)
-#         src = self.norm(src)
-#         sequence_output = src.reshape(-1,self.hidden_dim)
-
-
-#####################
 
         encoded_1stlayers = self.attn(new_query_features,
                                    mask[:, None, :, :],
