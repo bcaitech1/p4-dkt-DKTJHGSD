@@ -8,6 +8,7 @@ from dkt.utils import setSeeds, get_timestamp, kfold_ensemble
 import wandb
 from sklearn.model_selection import KFold
 import time
+import multiprocessing
 
 hyperparameter_defaults = dict(
     batch_size=64,
@@ -46,7 +47,14 @@ def main(args):
             elapsed_time = end_time - start_time
             elapsed_mins = int(elapsed_time / 60)
             elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
-            print(f'Sliding window : {args.slide_window}')
+           
+            if args.by_window_or_by_testid == 'by_testid':
+                print('Data Augmentation type : by_testid')
+                print(f'testid_cnt : {args.testid_cnt}')
+            elif args.by_window_or_by_testid == 'by_window':
+                print('Data Augmentation type : by_window')
+                print(f'Sliding window : {args.slide_window}')
+            print(f'Number of cpu core used : {multiprocessing.cpu_count()}')
             print(f'Time Spent on data preprocessing : {elapsed_mins} minutes {elapsed_secs} seconds')
             
             if args.sweep:  

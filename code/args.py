@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument('--test_file_name', default='test_data.csv', type=str, help='test file name')
 
     parser.add_argument('--max_seq_len', default=30, type=int, help='max sequence length')
-    parser.add_argument('--num_workers', default=2, type=int, help='number of workers')
+    parser.add_argument('--num_workers', default=4, type=int, help='number of workers')
 
     # 모델
     parser.add_argument('--hidden_dim', default=300, type=int, help='hidden dimension size')
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--kfold', default=0, type=int, help='utilize kfold') 
     parser.add_argument('--n_epochs', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size')
-    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-5, type=float, help='learning rate')
     parser.add_argument('--weight_decay', default=0.01, type=float, help='weight decay')  
     parser.add_argument('--clip_grad', default=10, type=int, help='clip grad')
     parser.add_argument('--patience', default=6, type=int, help='for early stopping')
@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--to_random_seq', default=False, type=bool, help = 'whether to use random max_seq')
     parser.add_argument('--slide_window', default=20, type=int) 
     parser.add_argument('--by_window_or_by_testid', default='by_testid', type=str, help='choose split data method')
-    parser.add_argument('--testid_cnt', default=1, type=int, help='minimum testid_cnt, 0 choose by length')
+    parser.add_argument('--testid_cnt', default=3, type=int, help='minimum testid_cnt, 0 choose by length')
     parser.add_argument('--Tfixup', default=False, type=bool, help='Utilize Tfixup')
     parser.add_argument('--layer_norm', default=True, type=bool, help='Utilize layer_norm')
     parser.add_argument('--pseudo_labeling', default=4, type=int, help='# times to replace answer w/ pseudo labeling')
