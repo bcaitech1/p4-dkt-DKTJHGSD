@@ -154,6 +154,8 @@ $ python ./train.py --model [MODEL_NAME] [...params...] --mode inference
 *Youngduck Choi et al., Towards an
 Appropriate Query, Key, and Value Computation for Knowledge Tracing. 2020.*
 
+*Yuhao Zhou et al., LANA: Towards Personalized Deep Knolwedge Tracing. 2021.*
+
 @misc{Charles2013,
   author = {Charles, P.W.D.},
   title = {Project Title},
